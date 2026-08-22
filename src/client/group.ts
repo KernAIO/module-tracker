@@ -1,5 +1,5 @@
 import type { StatusCategory } from '@kernhq/workflow'
-import type { GroupBy, Issue, Priority } from '../contract/index.js'
+import type { Issue, Priority } from '../contract/index.js'
 import { PRIORITY_GROUP_ORDER, STATUS_CATEGORY_ORDER } from './format.js'
 import { byRank } from './rank.js'
 
