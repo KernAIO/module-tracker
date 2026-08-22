@@ -54,4 +54,4 @@ export type {
   ViewLayout,
   Workflow,
   WorkItemType,
-} from '../contract/models.js'
+} from '@kernhq/module-tracker/contract'

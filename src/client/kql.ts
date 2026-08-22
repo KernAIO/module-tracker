@@ -1,14 +1,14 @@
-import type { KqlError, KqlSuggestion } from '../contract/models.js'
-import type { KqlExpr, KqlOp, KqlOrder, KqlQuery, KqlValue, Span } from '../kql/ast.js'
-import { printQuery } from '../kql/ast.js'
+import type { KqlError, KqlSuggestion } from '@kernhq/module-tracker/contract'
+import type { KqlExpr, KqlOp, KqlOrder, KqlQuery, KqlValue, Span } from '@kernhq/module-tracker/kql'
 import {
   customKqlField,
   findField,
   KQL_FUNCTIONS,
   type KqlField,
   operatorsFor,
+  printQuery,
   SYSTEM_FIELDS,
-} from '../kql/fields.js'
+} from '@kernhq/module-tracker/kql'
 
 /**
  * A KQL reader for the query box.
@@ -487,6 +487,14 @@ function suggest(tokens: Token[], fields: readonly KqlField[], cursor: number): 
     .map((k) => ({ kind: 'keyword' as const, label: k, insertText: `${k} ` }))
 }
 
-export type { KqlComparison, KqlExpr, KqlOp, KqlOrder, KqlQuery, KqlValue, Span } from '../kql/ast.js'
+export type {
+  KqlComparison,
+  KqlExpr,
+  KqlOp,
+  KqlOrder,
+  KqlQuery,
+  KqlValue,
+  Span,
+} from '@kernhq/module-tracker/kql'
 export type { KqlField }
 export { customKqlField, operatorsFor, SYSTEM_FIELDS }

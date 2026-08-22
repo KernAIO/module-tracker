@@ -1,6 +1,6 @@
+import type { TrackerContract } from '@kernhq/module-tracker/contract'
 import { createModuleClient, type KernClientOptions } from '@kernhq/sdk'
 import type { ContractRouterClient } from '@orpc/contract'
-import type { TrackerContract } from '../contract/index.js'
 
 /**
  * Typed oRPC client for `/api/tracker` (see `../contract`).

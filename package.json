@@ -15,21 +15,23 @@
   "files": [
     "dist",
     "migrations",
-    "src/client",
-    "docs"
+    "src/client"
   ],
   "exports": {
     "./contract": {
       "types": "./dist/contract/index.d.ts",
-      "import": "./dist/contract/index.js"
+      "import": "./dist/contract/index.js",
+      "default": "./dist/contract/index.js"
     },
     "./kql": {
       "types": "./dist/kql/index.d.ts",
-      "import": "./dist/kql/index.js"
+      "import": "./dist/kql/index.js",
+      "default": "./dist/kql/index.js"
     },
     "./server": {
       "types": "./dist/server/index.d.ts",
-      "import": "./dist/server/index.js"
+      "import": "./dist/server/index.js",
+      "default": "./dist/server/index.js"
     },
     "./client": {
       "types": "./src/client/index.ts",

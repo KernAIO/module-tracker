@@ -1,5 +1,5 @@
+import type { Priority } from '@kernhq/module-tracker/contract'
 import type { StatusCategory } from '@kernhq/workflow'
-import type { Priority } from '../contract/models.js'
 
 /**
  * Presentation rules shared by every tracker surface (list rows, board cards, detail panel).
