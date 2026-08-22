@@ -6,7 +6,6 @@ import type {
   Component,
   Cycle,
   FieldDef,
-  FieldScheme,
   ImportJob,
   Issue,
   IssueApproval,
@@ -36,6 +35,7 @@ import type {
 } from '../../contract/models.js'
 import {
   ProjectSettings as ProjectSettingsSchema,
+  ProjectTemplateBody,
   ViewDisplay as ViewDisplaySchema,
 } from '../../contract/models.js'
 import type {
@@ -44,7 +44,6 @@ import type {
   components,
   cycles,
   fieldDefs,
-  fieldSchemes,
   importJobs,
   issueApprovals,
   issueHistory,
@@ -74,7 +73,6 @@ export type ProjectTemplateRow = typeof projectTemplates.$inferSelect
 export type WorkItemTypeRow = typeof workItemTypes.$inferSelect
 export type TypeSchemeRow = typeof typeSchemes.$inferSelect
 export type FieldDefRow = typeof fieldDefs.$inferSelect
-export type FieldSchemeRow = typeof fieldSchemes.$inferSelect
 export type WorkflowRow = typeof workflows.$inferSelect
 export type WorkflowSchemeRow = typeof workflowSchemes.$inferSelect
 export type IssueRow = typeof issues.$inferSelect
@@ -145,7 +143,6 @@ export function toProject(r: ProjectRow, counters: Partial<ProjectCounters> = {}
     defaultAssignee: r.defaultAssignee as Project['defaultAssignee'],
     workflowSchemeId: r.workflowSchemeId,
     typeSchemeId: r.typeSchemeId,
-    fieldSchemeId: r.fieldSchemeId,
     settings: parseSettings(r.settings),
     intakeToken: r.intakeToken,
     issueCounter: counters.issueCounter ?? 0,
@@ -184,7 +181,9 @@ export function toProjectTemplate(r: ProjectTemplateRow): ProjectTemplate {
     name: r.name,
     description: r.description,
     icon: r.icon,
-    body: (r.body as Record<string, unknown>) ?? {},
+    // A body stored before it had a schema parses to an empty template rather than throwing here:
+    // one stale row must not break the whole list. Applying an empty body is refused at that end.
+    body: ProjectTemplateBody.safeParse(r.body ?? {}).data ?? ProjectTemplateBody.parse({}),
     builtin: r.builtin,
     createdAt: isoReq(r.createdAt),
   }
@@ -242,16 +241,6 @@ export function toFieldDef(r: FieldDefRow): FieldDef {
     archivedAt: iso(r.archivedAt),
     createdAt: isoReq(r.createdAt),
     updatedAt: isoReq(r.updatedAt),
-  }
-}
-
-export function toFieldScheme(r: FieldSchemeRow): FieldScheme {
-  return {
-    id: r.id,
-    workspaceId: asId(r.workspaceId),
-    name: r.name,
-    fieldIds: r.fieldIds ?? [],
-    createdAt: isoReq(r.createdAt),
   }
 }
 

@@ -55,7 +55,6 @@ export const projects = schema.table(
     defaultAssignee: text('default_assignee').notNull().default('unassigned'), // unassigned | lead
     workflowSchemeId: uuid('workflow_scheme_id'),
     typeSchemeId: uuid('type_scheme_id'),
-    fieldSchemeId: uuid('field_scheme_id'),
     settings: jsonObject('settings'),
     /** public intake form token; null disables the form */
     intakeToken: text('intake_token'),
@@ -209,18 +208,6 @@ export const fieldDefs = schema.table(
     uniqueIndex('field_defs_ws_key_uq').on(t.workspaceId, t.key),
     index('field_defs_ws_idx').on(t.workspaceId, t.projectId, t.order),
   ],
-)
-
-export const fieldSchemes = schema.table(
-  'field_schemes',
-  {
-    id: id(),
-    workspaceId: ws(),
-    name: text('name').notNull(),
-    fieldIds: uuidArray('field_ids'),
-    createdAt: ts('created_at').notNull().defaultNow(),
-  },
-  (t) => [index('field_schemes_ws_idx').on(t.workspaceId, t.createdAt)],
 )
 
 export const workflows = schema.table(
@@ -730,7 +717,6 @@ export const TENANT_TABLES = [
   'type_schemes',
   'hierarchy_rules',
   'field_defs',
-  'field_schemes',
   'workflows',
   'workflow_schemes',
   'issues',

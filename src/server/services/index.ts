@@ -5,6 +5,7 @@ import { ConfigService } from './config.js'
 import { ImportService } from './imports.js'
 import { IntakeService } from './intake.js'
 import { IssueService } from './issues.js'
+import { LayoutService } from './layout.js'
 import { NotifyService } from './notify.js'
 import { PlanningService } from './planning.js'
 import { ProjectService } from './projects.js'
@@ -18,6 +19,7 @@ export interface TrackerServices {
   access: AccessService
   notify: NotifyService
   config: ConfigService
+  layout: LayoutService
   projects: ProjectService
   issues: IssueService
   comments: CommentService
@@ -41,6 +43,7 @@ export function trackerServices(kernel: Kernel): TrackerServices {
   const access = new AccessService(kernel)
   const notify = new NotifyService(kernel)
   const config = new ConfigService(kernel, access, notify)
+  const layout = new LayoutService(config)
   const projects = new ProjectService(kernel, access, config, notify)
   const issues = new IssueService(kernel, access, config, notify)
   const comments = new CommentService(kernel, access, issues, notify)
@@ -58,6 +61,7 @@ export function trackerServices(kernel: Kernel): TrackerServices {
     access,
     notify,
     config,
+    layout,
     projects,
     issues,
     comments,

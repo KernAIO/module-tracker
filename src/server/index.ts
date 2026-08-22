@@ -1,7 +1,14 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { type core, Id, type Principal, UserId, WorkspaceId } from '@kernhq/contracts'
-import { defineModule, defineServerModule, type JobDef, KernError, type Kernel } from '@kernhq/kernel'
+import {
+  defineModule,
+  defineServerModule,
+  type JobDef,
+  KernError,
+  type Kernel,
+  type Tx,
+} from '@kernhq/kernel'
 import { and, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
@@ -16,7 +23,7 @@ import {
   UpdateIssue,
 } from '../contract/index.js'
 import { trackerRouter } from './router.js'
-import { cycles, issues, projectMembers, projects, schema, workspaces } from './schema.js'
+import { cycles, fieldDefs, issues, projectMembers, projects, schema, workspaces } from './schema.js'
 import { issueUrl, projectUrl } from './services/db.js'
 import { trackerServices } from './services/index.js'
 
@@ -455,9 +462,11 @@ export const trackerModule = defineServerModule({
             .where(and(eq(issues.workspaceId, workspaceId), eq(issues.id, id)))
             .limit(1)
           if (!row || row.archivedAt) return null
-          return searchDocument(workspaceId, row)
+          return searchDocument(workspaceId, row, await searchableKeys(tx, workspaceId))
         }),
       scan: async function* (workspaceId, kernel) {
+        // read once for the whole scan rather than per row
+        const keys = await kernel.database.withWorkspace(workspaceId, (tx) => searchableKeys(tx, workspaceId))
         let cursor: string | null = null
         for (;;) {
           const rows: Array<typeof issues.$inferSelect> = await kernel.database.withWorkspace(
@@ -477,7 +486,7 @@ export const trackerModule = defineServerModule({
                 .limit(500),
           )
           if (!rows.length) return
-          for (const row of rows) yield searchDocument(workspaceId, row)
+          for (const row of rows) yield searchDocument(workspaceId, row, keys)
           cursor = rows.at(-1)?.id ?? null
         }
       },
@@ -704,12 +713,36 @@ export const trackerModule = defineServerModule({
   },
 })
 
-function searchDocument(workspaceId: string, row: typeof issues.$inferSelect): core.SearchDocument {
+/**
+ * Text from the custom fields marked `searchable`, appended to the indexed body.
+ *
+ * `searchable` has been settable since the field editor existed and reached nothing, so a workspace
+ * that marked "Customer" searchable could not find an issue by customer name.
+ */
+function searchableText(row: typeof issues.$inferSelect, searchableKeys: ReadonlySet<string>): string {
+  if (!searchableKeys.size) return ''
+  const custom = (row.custom as Record<string, unknown>) ?? {}
+  const parts: string[] = []
+  for (const key of searchableKeys) {
+    const value = custom[key]
+    if (value === null || value === undefined) continue
+    if (Array.isArray(value)) parts.push(value.filter((v) => typeof v === 'string').join(' '))
+    else if (typeof value === 'string' || typeof value === 'number') parts.push(String(value))
+  }
+  return parts.filter(Boolean).join(' ')
+}
+
+function searchDocument(
+  workspaceId: string,
+  row: typeof issues.$inferSelect,
+  searchableKeys: ReadonlySet<string> = new Set(),
+): core.SearchDocument {
+  const extra = searchableText(row, searchableKeys)
   return {
     workspaceId: workspaceId as core.SearchDocument['workspaceId'],
     object: objectRef('issue', row.id),
     title: `${row.key} ${row.title}`,
-    body: row.descriptionText || null,
+    body: [row.descriptionText || '', extra].filter(Boolean).join('\n') || null,
     url: issueUrl(row.key),
     icon: 'square-check-big',
     acl: null,
@@ -722,6 +755,21 @@ function searchDocument(workspaceId: string, row: typeof issues.$inferSelect): c
       assigneeIds: row.assigneeIds ?? [],
     },
   }
+}
+
+/** Keys of the workspace's custom fields marked `searchable`. */
+async function searchableKeys(tx: Tx, workspaceId: string): Promise<ReadonlySet<string>> {
+  const rows = await tx
+    .select({ key: fieldDefs.key })
+    .from(fieldDefs)
+    .where(
+      and(
+        eq(fieldDefs.workspaceId, workspaceId),
+        eq(fieldDefs.searchable, true),
+        isNull(fieldDefs.archivedAt),
+      ),
+    )
+  return new Set(rows.map((r) => r.key))
 }
 
 export default trackerModule

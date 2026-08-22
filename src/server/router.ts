@@ -215,6 +215,13 @@ export function trackerRouter(kernel: Kernel) {
             svc.config.archiveType(tx, input.workspaceId, input.id, input.archived),
           ),
         ),
+      layout: scoped.types.layout
+        .use(requires('tracker.project.view'))
+        .handler(({ input, context }) =>
+          run(context, input.workspaceId, (tx) =>
+            svc.layout.resolve(tx, input.workspaceId, input.projectId ?? null, input.id),
+          ),
+        ),
       hierarchyRules: scoped.types.hierarchyRules.handler(({ input, context }) =>
         run(context, input.workspaceId, (tx) => svc.config.hierarchyRules(tx, input.workspaceId)),
       ),
@@ -292,33 +299,6 @@ export function trackerRouter(kernel: Kernel) {
           )
           return ok
         }),
-      schemes: {
-        list: scoped.fields.schemes.list.handler(({ input, context }) =>
-          run(context, input.workspaceId, (tx) => svc.config.listFieldSchemes(tx, input.workspaceId)),
-        ),
-        create: scoped.fields.schemes.create
-          .use(requires('tracker.field.manage'))
-          .handler(({ input, context }) =>
-            run(context, input.workspaceId, (tx) =>
-              svc.config.createFieldScheme(tx, input.workspaceId, input),
-            ),
-          ),
-        update: scoped.fields.schemes.update
-          .use(requires('tracker.field.manage'))
-          .handler(({ input, context }) =>
-            run(context, input.workspaceId, (tx) =>
-              svc.config.updateFieldScheme(tx, input.workspaceId, input.id, input.patch),
-            ),
-          ),
-        delete: scoped.fields.schemes.delete
-          .use(requires('tracker.field.manage'))
-          .handler(async ({ input, context }) => {
-            await run(context, input.workspaceId, (tx) =>
-              svc.config.deleteFieldScheme(tx, input.workspaceId, input.id),
-            )
-            return ok
-          }),
-      },
     },
 
     // ------------------------------------------------------------------ workflows

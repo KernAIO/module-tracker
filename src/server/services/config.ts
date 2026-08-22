@@ -14,7 +14,6 @@ import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import {
   type FieldDef,
-  type FieldScheme,
   HierarchyRules,
   type StatusInfo,
   type TypeScheme,
@@ -28,7 +27,6 @@ import {
 } from '../../contract/models.js'
 import {
   fieldDefs,
-  fieldSchemes,
   hierarchyRules,
   issues,
   projects,
@@ -42,7 +40,6 @@ import {
   type FieldDefRow,
   type ProjectRow,
   toFieldDef,
-  toFieldScheme,
   toTypeScheme,
   toWorkflow,
   toWorkflowScheme,
@@ -363,17 +360,7 @@ export class ConfigService {
       .from(fieldDefs)
       .where(and(...filters))
       .orderBy(asc(fieldDefs.order), asc(fieldDefs.name))
-    if (!opts.projectId) return rows
-    const [project] = await tx
-      .select({ fieldSchemeId: projects.fieldSchemeId })
-      .from(projects)
-      .where(eq(projects.id, opts.projectId))
-      .limit(1)
-    if (!project?.fieldSchemeId) return rows
-    const [scheme] = await tx.select().from(fieldSchemes).where(eq(fieldSchemes.id, project.fieldSchemeId))
-    if (!scheme?.fieldIds?.length) return rows
-    const allowed = new Set(scheme.fieldIds)
-    return rows.filter((r) => allowed.has(r.id) || r.projectId === opts.projectId)
+    return rows
   }
 
   async listFields(
@@ -484,55 +471,6 @@ export class ConfigService {
       .where(and(eq(issues.workspaceId, workspaceId), sql`${issues.custom} ? ${row.key}`))
     await tx.delete(fieldDefs).where(and(eq(fieldDefs.workspaceId, workspaceId), eq(fieldDefs.id, id)))
     await this.announce(workspaceId, 'field', id, 'deleted')
-  }
-
-  async listFieldSchemes(tx: Tx, workspaceId: string): Promise<FieldScheme[]> {
-    const rows = await tx
-      .select()
-      .from(fieldSchemes)
-      .where(eq(fieldSchemes.workspaceId, workspaceId))
-      .orderBy(asc(fieldSchemes.createdAt))
-    return rows.map(toFieldScheme)
-  }
-
-  async createFieldScheme(
-    tx: Tx,
-    workspaceId: string,
-    input: { name: string; fieldIds: string[] },
-  ): Promise<FieldScheme> {
-    const [row] = await tx
-      .insert(fieldSchemes)
-      .values({ id: uuidv7(), workspaceId, name: input.name, fieldIds: input.fieldIds })
-      .returning()
-    await this.announce(workspaceId, 'field_scheme', row!.id, 'created')
-    return toFieldScheme(row!)
-  }
-
-  async updateFieldScheme(
-    tx: Tx,
-    workspaceId: string,
-    id: string,
-    patch: { name?: string; fieldIds?: string[] },
-  ): Promise<FieldScheme> {
-    const [row] = await tx
-      .update(fieldSchemes)
-      .set({
-        ...(patch.name === undefined ? {} : { name: patch.name }),
-        ...(patch.fieldIds === undefined ? {} : { fieldIds: patch.fieldIds }),
-      })
-      .where(and(eq(fieldSchemes.workspaceId, workspaceId), eq(fieldSchemes.id, id)))
-      .returning()
-    if (!row) throw KernError.notFound('Field scheme')
-    await this.announce(workspaceId, 'field_scheme', id, 'updated')
-    return toFieldScheme(row)
-  }
-
-  async deleteFieldScheme(tx: Tx, workspaceId: string, id: string): Promise<void> {
-    await tx.update(projects).set({ fieldSchemeId: null }).where(eq(projects.fieldSchemeId, id))
-    await tx
-      .delete(fieldSchemes)
-      .where(and(eq(fieldSchemes.workspaceId, workspaceId), eq(fieldSchemes.id, id)))
-    await this.announce(workspaceId, 'field_scheme', id, 'deleted')
   }
 
   // ------------------------------------------------------------------ workflows

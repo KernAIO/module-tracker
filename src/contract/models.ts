@@ -124,7 +124,6 @@ export const Project = z.object({
   defaultAssignee: z.enum(['unassigned', 'lead']),
   workflowSchemeId: Id.nullable(),
   typeSchemeId: Id.nullable(),
-  fieldSchemeId: Id.nullable(),
   settings: ProjectSettings,
   /** public intake form token (null = intake disabled) */
   intakeToken: z.string().nullable(),
@@ -141,6 +140,14 @@ export const Project = z.object({
 })
 export type Project = z.infer<typeof Project>
 
+/**
+ * The built-in project templates. `software`, `support`, `marketing` and `simple` are the four
+ * team shapes the tracker ships with; `kanban` and `blank` are kept because existing projects were
+ * created from them.
+ */
+export const ProjectTemplateId = z.enum(['software', 'support', 'marketing', 'simple', 'kanban', 'blank'])
+export type ProjectTemplateId = z.infer<typeof ProjectTemplateId>
+
 export const CreateProject = z.object({
   key: ProjectKey,
   name: z.string().min(1).max(120),
@@ -150,8 +157,8 @@ export const CreateProject = z.object({
   leadId: UserId.optional(),
   visibility: ProjectVisibility.default('workspace'),
   defaultAssignee: z.enum(['unassigned', 'lead']).default('unassigned'),
-  /** seed types/workflow from a built-in template */
-  template: z.enum(['software', 'kanban', 'simple', 'blank']).default('software'),
+  /** seed types/workflow/fields from a built-in template */
+  template: ProjectTemplateId.default('software'),
   /** or from a saved project template (overrides `template`) */
   templateId: Id.optional(),
   settings: ProjectSettings.partial().optional(),
@@ -169,7 +176,6 @@ export const UpdateProject = z.object({
   defaultAssignee: z.enum(['unassigned', 'lead']).optional(),
   workflowSchemeId: Id.nullable().optional(),
   typeSchemeId: Id.nullable().optional(),
-  fieldSchemeId: Id.nullable().optional(),
   settings: ProjectSettings.partial().optional(),
 })
 export type UpdateProject = z.infer<typeof UpdateProject>
@@ -186,21 +192,6 @@ export const ProjectMember = z.object({
 })
 export type ProjectMember = z.infer<typeof ProjectMember>
 
-/** Reusable project blueprint (types, workflow, fields, labels, sample views). */
-export const ProjectTemplate = z.object({
-  id: Id,
-  workspaceId: WorkspaceId.nullable(),
-  key: MachineKey,
-  name: z.string().min(1).max(120),
-  description: z.string().max(1000).nullable(),
-  icon: z.string().max(64).nullable(),
-  /** a full ProjectTemplateBody JSON */
-  body: z.record(z.string(), z.unknown()),
-  builtin: z.boolean(),
-  createdAt: Timestamp,
-})
-export type ProjectTemplate = z.infer<typeof ProjectTemplate>
-
 // =====================================================================================
 // work item types & hierarchy
 // =====================================================================================
@@ -209,16 +200,66 @@ export type ProjectTemplate = z.infer<typeof ProjectTemplate>
 export const HierarchyLevel = z.number().int().min(-1).max(2)
 export type HierarchyLevel = z.infer<typeof HierarchyLevel>
 
+/**
+ * The system fields a work item type may lay out, in their default order.
+ *
+ * `pinned` fields are always visible: an issue without a title, a status or a type is not an
+ * issue. The settings editor does not offer the control, and the resolver ignores a stored
+ * instruction that tries to hide one.
+ */
+export const SYSTEM_LAYOUT_FIELDS = [
+  { id: 'title', section: 'main', pinned: true },
+  { id: 'description', section: 'main', pinned: false },
+  { id: 'status', section: 'sidebar', pinned: true },
+  { id: 'type', section: 'sidebar', pinned: true },
+  { id: 'assignees', section: 'sidebar', pinned: false },
+  { id: 'priority', section: 'sidebar', pinned: false },
+  { id: 'labels', section: 'sidebar', pinned: false },
+  { id: 'components', section: 'sidebar', pinned: false },
+  { id: 'versions', section: 'sidebar', pinned: false },
+  { id: 'estimate', section: 'sidebar', pinned: false },
+  { id: 'startDate', section: 'sidebar', pinned: false },
+  { id: 'dueDate', section: 'sidebar', pinned: false },
+  { id: 'cycle', section: 'sidebar', pinned: false },
+  { id: 'milestone', section: 'sidebar', pinned: false },
+  { id: 'parent', section: 'sidebar', pinned: false },
+  { id: 'reporter', section: 'sidebar', pinned: false },
+] as const satisfies ReadonlyArray<{
+  id: string
+  section: 'main' | 'sidebar'
+  pinned: boolean
+}>
+
+export const SystemFieldId = z.enum(SYSTEM_LAYOUT_FIELDS.map((f) => f.id) as [string, ...string[]])
+export type SystemFieldId = (typeof SYSTEM_LAYOUT_FIELDS)[number]['id']
+
+/** System field ids that may never be hidden, whatever a stored layout says. */
+export const PINNED_FIELD_IDS: readonly string[] = SYSTEM_LAYOUT_FIELDS.filter((f) => f.pinned).map(
+  (f) => f.id,
+)
+
+/**
+ * A layout entry's `fieldId` is a *namespaced* name: a system field id (`priority`, `dueDate`) or
+ * `cf.<key>` for a custom field. That is the same string KQL, `ViewDisplay.columns` and workflow
+ * post-functions already use, so one resolver serves all four.
+ */
+export const LayoutFieldId = z
+  .string()
+  .min(1)
+  .max(80)
+  .regex(/^(?:[a-zA-Z][a-zA-Z0-9_]*|cf\.[a-z][a-z0-9_]*)$/, 'Expected a system field id or `cf.<key>`')
+export type LayoutFieldId = z.infer<typeof LayoutFieldId>
+
 export const FieldLayoutItem = z.object({
-  /** system field name (`priority`, `dueDate`…) or custom field id */
-  fieldId: z.string().min(1),
+  /** system field id (`priority`, `dueDate`…) or `cf.<key>` for a custom field */
+  fieldId: LayoutFieldId,
   section: z.enum(['main', 'sidebar', 'hidden']).default('sidebar'),
+  /** required on this type, over and above the field definition's own `required` */
   required: z.boolean().default(false),
   hidden: z.boolean().default(false),
   order: z.number().int().default(0),
 })
 export type FieldLayoutItem = z.infer<typeof FieldLayoutItem>
-
 export const WorkItemType = z.object({
   id: Id,
   workspaceId: WorkspaceId,
@@ -377,15 +418,37 @@ export const UpsertFieldDef = z.object({
 })
 export type UpsertFieldDef = z.infer<typeof UpsertFieldDef>
 
-/** Field scheme: which custom fields a project exposes (null = all applicable). */
-export const FieldScheme = z.object({
-  id: Id,
-  workspaceId: WorkspaceId,
-  name: z.string().min(1).max(120),
-  fieldIds: z.array(Id),
-  createdAt: Timestamp,
+/** One field as an interface should render it, system and custom fields alike. */
+export const ResolvedField = z.object({
+  fieldId: LayoutFieldId,
+  /** `system` fields are rendered by a built-in component, `custom` ones by their field type */
+  kind: z.enum(['system', 'custom']),
+  label: z.string().min(1).max(120),
+  section: z.enum(['main', 'sidebar']),
+  order: z.number().int(),
+  required: z.boolean(),
+  pinned: z.boolean(),
+  showInCards: z.boolean(),
+  /** present when `kind` is `custom` — everything needed to render and validate the value */
+  field: FieldDef.nullable(),
 })
-export type FieldScheme = z.infer<typeof FieldScheme>
+export type ResolvedField = z.infer<typeof ResolvedField>
+
+/**
+ * The fields of one work item type in one project, already ordered and merged.
+ *
+ * An **empty stored layout means the default layout** — everything visible. A field the stored
+ * layout does not name appends to `sidebar` rather than disappearing, so a newly created field
+ * shows up instead of looking broken.
+ */
+export const ResolvedLayout = z.object({
+  typeId: Id,
+  projectId: Id.nullable(),
+  main: z.array(ResolvedField),
+  sidebar: z.array(ResolvedField),
+  hidden: z.array(ResolvedField),
+})
+export type ResolvedLayout = z.infer<typeof ResolvedLayout>
 
 // =====================================================================================
 // workflows
@@ -1053,6 +1116,13 @@ export const GroupBy = z.enum([
 ])
 export type GroupBy = z.infer<typeof GroupBy>
 
+/**
+ * A group key that may also name a custom field. `GroupBy` stays as it was so nothing that accepts
+ * only the built-in keys has to change; views and `issues.query` accept this wider one.
+ */
+export const GroupByValue = z.union([GroupBy, z.string().regex(/^cf\.[a-z][a-z0-9_]*$/)])
+export type GroupByValue = z.infer<typeof GroupByValue>
+
 export const OrderBy = z.object({
   /** KQL field name (`priority`, `updated`, `rank`, `cf.severity`…) */
   field: z.string().min(1),
@@ -1071,7 +1141,7 @@ export const BoardColumn = z.object({
 export type BoardColumn = z.infer<typeof BoardColumn>
 
 export const ViewDisplay = z.object({
-  groupBy: GroupBy.default('none'),
+  groupBy: GroupByValue.default('none'),
   subGroupBy: GroupBy.optional(),
   orderBy: z.array(OrderBy).default([{ field: 'rank', dir: 'asc' }]),
   /** visible columns (list/spreadsheet): system field names or `cf.<key>` */
@@ -1084,8 +1154,13 @@ export const ViewDisplay = z.object({
   /** board columns (null → one column per status of the project's workflows) */
   boardColumns: z.array(BoardColumn).nullable().default(null),
   wipLimits: z.record(z.string(), z.number().int().positive()).default({}),
-  /** calendar: which date field positions issues */
-  calendarField: z.enum(['dueDate', 'startDate', 'createdAt']).default('dueDate'),
+  /** calendar: which date field positions issues — a system date field or `cf.<key>` */
+  calendarField: z
+    .union([
+      z.enum(['dueDate', 'startDate', 'createdAt', 'updatedAt', 'resolvedAt']),
+      z.string().regex(/^cf\.[a-z][a-z0-9_]*$/),
+    ])
+    .default('dueDate'),
   /** timeline: show dependency arrows */
   showDependencies: z.boolean().default(true),
   density: z.enum(['compact', 'comfortable']).default('comfortable'),
@@ -1420,3 +1495,52 @@ export const IssueApproval = z.object({
   updatedAt: Timestamp,
 })
 export type IssueApproval = z.infer<typeof IssueApproval>
+
+// =====================================================================================
+// project templates
+// =====================================================================================
+
+/**
+ * Everything a template seeds into a new project. This is the *only* description of a template's
+ * contents: the built-in four are values of this type in code, and a template saved from an
+ * existing project snapshots into the same shape, so one applier serves both.
+ *
+ * Ids inside a body are template-local. Workflows are named by index, types name their workflow by
+ * that index, and layouts name fields by `cf.<key>` — nothing here refers to a database id, which
+ * is what lets a body created in one workspace apply in another.
+ */
+export const ProjectTemplateBody = z.object({
+  version: z.literal(1).default(1),
+  settings: ProjectSettings.partial().optional(),
+  workflows: z
+    .array(z.object({ name: z.string().min(1).max(120), definition: WorkflowDefinition }))
+    .default([]),
+  fields: z.array(UpsertFieldDef).default([]),
+  types: z
+    .array(
+      UpsertWorkItemType.omit({ workflowId: true }).extend({
+        /** index into `workflows`; null → the project's default workflow */
+        workflowIndex: z.number().int().nonnegative().nullable().default(null),
+      }),
+    )
+    .default([]),
+  labels: z
+    .array(z.object({ name: z.string().min(1).max(60), color: Color.nullable().default(null) }))
+    .default([]),
+  views: z.array(UpsertView).default([]),
+})
+export type ProjectTemplateBody = z.infer<typeof ProjectTemplateBody>
+
+/** Reusable project blueprint (types, workflow, fields, labels, sample views). */
+export const ProjectTemplate = z.object({
+  id: Id,
+  workspaceId: WorkspaceId.nullable(),
+  key: MachineKey,
+  name: z.string().min(1).max(120),
+  description: z.string().max(1000).nullable(),
+  icon: z.string().max(64).nullable(),
+  body: ProjectTemplateBody,
+  builtin: z.boolean(),
+  createdAt: Timestamp,
+})
+export type ProjectTemplate = z.infer<typeof ProjectTemplate>

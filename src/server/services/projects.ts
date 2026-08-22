@@ -260,7 +260,6 @@ export class ProjectService {
         ...(patch.defaultAssignee === undefined ? {} : { defaultAssignee: patch.defaultAssignee }),
         ...(patch.workflowSchemeId === undefined ? {} : { workflowSchemeId: patch.workflowSchemeId }),
         ...(patch.typeSchemeId === undefined ? {} : { typeSchemeId: patch.typeSchemeId }),
-        ...(patch.fieldSchemeId === undefined ? {} : { fieldSchemeId: patch.fieldSchemeId }),
         ...(settings === undefined ? {} : { settings }),
         updatedAt: new Date(),
       })

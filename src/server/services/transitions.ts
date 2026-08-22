@@ -33,6 +33,7 @@ import type { ConfigService } from './config.js'
 import { type IssueRow, issueUrl, type ProjectRow, parseSettings, toApproval, uniq } from './db.js'
 import type { IssueService } from './issues.js'
 import type { NotifyService } from './notify.js'
+import { checkValue } from './values.js'
 
 const registry = builtinRegistry()
 
@@ -250,6 +251,8 @@ export class TransitionService {
 
     const issue = await this.commit(tx, principal, workspaceId, row, project, {
       transitionId: transition.id,
+      screen: transition.screen ?? null,
+      screenFields: input.fields ?? {},
       toStatusId: result.to.id,
       toCategory: result.to.category,
       intents: result.intents,
@@ -272,6 +275,8 @@ export class TransitionService {
     project: ProjectRow,
     plan: {
       transitionId: string
+      screen: { fields: string[]; comment: boolean } | null
+      screenFields: Record<string, unknown>
       toStatusId: string
       toCategory: string
       intents: Intent[]
@@ -292,6 +297,32 @@ export class TransitionService {
     const webhooks: Array<Extract<Intent, { kind: 'webhook' }>> = []
     const notifications: Array<Extract<Intent, { kind: 'notify' }>> = []
     const subitems: Array<Extract<Intent, { kind: 'subitem.create' }>> = []
+
+    // What the transition screen collected. This used to be handed to the rule engine and then
+    // dropped, so a screen appeared to work only when a `field.set` post-function happened to
+    // repeat the value.
+    //
+    // Only the fields the screen *declares* are applied: `tracker.issue.transition` is a narrower
+    // permission than `tracker.issue.update`, and an unfiltered patch here would be a way around it.
+    if (plan.screen?.fields.length) {
+      const declared = new Set(plan.screen.fields)
+      const defs = await this.config.listFields(tx, workspaceId, { projectId: row.projectId })
+      for (const [name, value] of Object.entries(plan.screenFields)) {
+        if (!declared.has(name)) continue
+        const column = SETTABLE_COLUMNS[name]
+        if (column) {
+          patch[column] = value
+          continue
+        }
+        const key = name.startsWith('cf.') ? name.slice(3) : name
+        const def = defs.find((d) => d.key === key)
+        if (!def) continue
+        const problem = checkValue(def, value)
+        if (problem) throw KernError.badRequest(problem, { field: `cf.${key}` })
+        if (value === null) delete custom[key]
+        else custom[key] = value
+      }
+    }
 
     for (const intent of plan.intents) {
       switch (intent.kind) {
@@ -628,6 +659,9 @@ export class TransitionService {
     if (!target) throw KernError.badRequest(`Unknown status "${statusId}"`)
     return this.commit(tx, principal, workspaceId, row, project, {
       transitionId: `direct:${statusId}`,
+      // a direct status set has no screen to collect anything
+      screen: null,
+      screenFields: {},
       toStatusId: target.id,
       toCategory: target.category,
       intents: [],

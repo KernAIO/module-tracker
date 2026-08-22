@@ -311,6 +311,7 @@ describe('issues', () => {
 
   it('merges custom values and removes a key when the value is null', async () => {
     await run((tx) => svc.config.createField(tx, WS_A, { key: 'severity', name: 'Severity', type: 'text' }))
+    await run((tx) => svc.config.createField(tx, WS_A, { key: 'extra', name: 'Extra', type: 'number' }))
     const withValue = await run((tx) =>
       svc.issues.update(tx, alice(), WS_A, first.id, { custom: { severity: 'sev1', extra: 1 } }),
     )
@@ -320,6 +321,32 @@ describe('issues', () => {
     )
     expect(cleared.custom.severity).toBeUndefined()
     expect(cleared.custom.extra).toBe(1)
+  })
+
+  it('refuses a custom key that no field defines', async () => {
+    // A key with no definition used to be stored as written, so `serverity` looked like a field
+    // that would not save. It is now an error naming the key.
+    await expect(
+      run((tx) => svc.issues.update(tx, alice(), WS_A, first.id, { custom: { serverity: 'sev1' } })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('validates a custom value on update, not only on create', async () => {
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        key: 'impact_level',
+        name: 'Impact level',
+        type: 'select',
+        options: [{ id: 'high', label: 'High', color: null, order: 0, archived: false }],
+      } as never),
+    )
+    await expect(
+      run((tx) => svc.issues.update(tx, alice(), WS_A, first.id, { custom: { impact_level: 'nonsense' } })),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    const ok = await run((tx) =>
+      svc.issues.update(tx, alice(), WS_A, first.id, { custom: { impact_level: 'high' } }),
+    )
+    expect(ok.custom.impact_level).toBe('high')
   })
 
   it('keeps sub-item hierarchy rules', async () => {
@@ -1471,8 +1498,11 @@ describe('contract conformance', () => {
     expect(valid(models.FieldDef, field)).toBe(true)
     expect(
       valid(
-        models.FieldScheme,
-        await run((tx) => svc.config.createFieldScheme(tx, WS_A, { name: 'Fields', fieldIds: [field.id] })),
+        models.ResolvedLayout,
+        await run(async (tx) => {
+          const [firstType] = await svc.config.listTypes(tx, WS_A, { projectId: project.id })
+          return svc.layout.resolve(tx, WS_A, project.id, firstType!.id)
+        }),
       ),
     ).toBe(true)
 
@@ -1997,5 +2027,194 @@ describe('workflow and field definition guards', () => {
         } as never),
       ),
     ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+})
+
+// =====================================================================================
+
+describe('resolved field layout', () => {
+  let projectId: string
+  let typeId: string
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'LAY', name: 'Layout', template: 'software' } as never),
+    )
+    projectId = project.id
+    const types = await run((tx) => svc.config.listTypes(tx, WS_A, { projectId }))
+    typeId = types.find((t) => t.key === 'bug')!.id
+  })
+
+  const resolve = () => run((tx) => svc.layout.resolve(tx, WS_A, projectId, typeId))
+
+  it('shows every field when the type has no stored layout', async () => {
+    // Every type starts with `fieldLayout: []`. If that meant "hide everything", deploying this
+    // would blank the issue panel of every existing workspace.
+    const layout = await resolve()
+    expect(layout.hidden).toEqual([])
+    expect(layout.main.map((f) => f.fieldId)).toContain('title')
+    expect(layout.sidebar.map((f) => f.fieldId)).toEqual(
+      expect.arrayContaining(['status', 'priority', 'dueDate']),
+    )
+  })
+
+  it('appends a newly created field instead of hiding it', async () => {
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'severity_level',
+        name: 'Severity level',
+        type: 'select',
+        options: [
+          { id: 'sev1', label: 'Sev 1', color: null, order: 0, archived: false },
+          { id: 'sev2', label: 'Sev 2', color: null, order: 1, archived: false },
+        ],
+      } as never),
+    )
+    // The layout is still `[]`, so it names nothing — the field must appear anyway.
+    const layout = await resolve()
+    const found = layout.sidebar.find((f) => f.fieldId === 'cf.severity_level')
+    expect(found).toMatchObject({ kind: 'custom', label: 'Severity level' })
+    expect(found!.field?.options.map((o) => o.id)).toEqual(['sev1', 'sev2'])
+  })
+
+  it('moves a field to main, hides a built-in one, and keeps pinned fields visible', async () => {
+    await run((tx) =>
+      svc.config.updateType(tx, WS_A, typeId, {
+        fieldLayout: [
+          { fieldId: 'cf.severity_level', section: 'main', order: 1, required: true, hidden: false },
+          { fieldId: 'dueDate', section: 'hidden', order: 0, required: false, hidden: true },
+          // an attempt to hide a pinned field, which the resolver must refuse
+          { fieldId: 'status', section: 'hidden', order: 0, required: false, hidden: true },
+        ],
+      } as never),
+    )
+    const layout = await resolve()
+    expect(layout.main.map((f) => f.fieldId)).toContain('cf.severity_level')
+    expect(layout.main.find((f) => f.fieldId === 'cf.severity_level')!.required).toBe(true)
+    expect(layout.hidden.map((f) => f.fieldId)).toEqual(['dueDate'])
+    expect(layout.sidebar.map((f) => f.fieldId)).toContain('status')
+    expect(layout.sidebar.find((f) => f.fieldId === 'status')!.pinned).toBe(true)
+  })
+
+  it('drops an archived field from every section', async () => {
+    const field = await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'retired_field',
+        name: 'Retired',
+        type: 'text',
+      } as never),
+    )
+    expect((await resolve()).sidebar.map((f) => f.fieldId)).toContain('cf.retired_field')
+    await run((tx) => svc.config.archiveField(tx, WS_A, field.id, true))
+    const after = await resolve()
+    const everywhere = [...after.main, ...after.sidebar, ...after.hidden].map((f) => f.fieldId)
+    expect(everywhere).not.toContain('cf.retired_field')
+  })
+})
+
+// =====================================================================================
+
+describe('transition screens', () => {
+  let projectId: string
+  let typeId: string
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'SCR', name: 'Screens', template: 'software' } as never),
+    )
+    projectId = project.id
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'closing_note',
+        name: 'Closing note',
+        type: 'text',
+      } as never),
+    )
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'never_on_a_screen',
+        name: 'Not on any screen',
+        type: 'text',
+      } as never),
+    )
+    const workflow = await run((tx) =>
+      svc.config.createWorkflow(tx, WS_A, {
+        projectId,
+        name: 'Screen flow',
+        definition: {
+          id: 'screen',
+          name: 'Screen flow',
+          statuses: [
+            { id: 'open', name: 'Open', category: 'todo', order: 0, initial: true },
+            { id: 'closed', name: 'Closed', category: 'done', order: 1 },
+          ],
+          transitions: [
+            {
+              id: 'close',
+              name: 'Close',
+              from: ['open'],
+              to: 'closed',
+              screen: { fields: ['cf.closing_note', 'priority'], comment: false },
+            },
+          ],
+        } as never,
+      }),
+    )
+    const type = await run((tx) =>
+      svc.config.createType(
+        tx,
+        WS_A,
+        { projectId, key: 'screened', name: 'Screened', level: 0, workflowId: workflow.id } as never,
+        ALICE,
+      ),
+    )
+    typeId = type.id
+  })
+
+  const newIssue = () =>
+    run((tx) => svc.issues.create(tx, alice(), WS_A, { projectId, title: 'Screened', typeId } as never))
+
+  it('saves the values a transition screen collects', async () => {
+    // These used to reach the rule engine and then be dropped, so a screen only appeared to work
+    // when a `field.set` post-function repeated the value.
+    const issue = await newIssue()
+    const { issue: closed } = await run((tx) =>
+      svc.transitions.apply(tx, alice(), WS_A, issue.id, {
+        transitionId: 'close',
+        fields: { 'cf.closing_note': 'Fixed in 1.2', priority: 'high' },
+      } as never),
+    )
+    expect(closed.statusId).toBe('closed')
+    expect(closed.custom.closing_note).toBe('Fixed in 1.2')
+    expect(closed.priority).toBe('high')
+  })
+
+  it('ignores a field the screen does not declare', async () => {
+    // `tracker.issue.transition` is narrower than `tracker.issue.update`; an unfiltered patch here
+    // would be a way to write fields the actor may not be allowed to change.
+    const issue = await newIssue()
+    const { issue: closed } = await run((tx) =>
+      svc.transitions.apply(tx, alice(), WS_A, issue.id, {
+        transitionId: 'close',
+        fields: { 'cf.never_on_a_screen': 'sneaked in' },
+      } as never),
+    )
+    expect(closed.custom.never_on_a_screen).toBeUndefined()
+  })
+
+  it('rejects a screen value that fails its field validation', async () => {
+    const issue = await newIssue()
+    await expect(
+      run((tx) =>
+        svc.transitions.apply(tx, alice(), WS_A, issue.id, {
+          transitionId: 'close',
+          fields: { 'cf.closing_note': 42 },
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 })

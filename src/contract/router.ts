@@ -16,7 +16,6 @@ import {
   Cycle,
   DateOnly,
   FieldDef,
-  FieldScheme,
   HierarchyRules,
   ImportJob,
   ImportSource,
@@ -42,6 +41,7 @@ import {
   RecurringIssue,
   RelationType,
   RelationView,
+  ResolvedLayout,
   RichDoc,
   StatusHistoryEntry,
   StatusInfo,
@@ -173,6 +173,11 @@ export const trackerContract = {
       .route({ method: 'POST', path: '/types/{id}/archive', ...t('types') })
       .input(ws.extend({ id: Id, archived: z.boolean().default(true) }))
       .output(WorkItemType),
+    /** the fields of one type in one project, ordered and merged — what a form should render */
+    layout: baseContract
+      .route({ method: 'GET', path: '/types/{id}/layout', ...t('types') })
+      .input(ws.extend({ id: Id, projectId: Id.nullable().optional() }))
+      .output(ResolvedLayout),
     hierarchyRules: baseContract
       .route({ method: 'GET', path: '/types/hierarchy-rules', ...t('types') })
       .input(ws)
@@ -238,32 +243,6 @@ export const trackerContract = {
       .route({ method: 'DELETE', path: '/fields/{id}', ...t('fields') })
       .input(ws.extend({ id: Id }))
       .output(Ok),
-    schemes: {
-      list: baseContract
-        .route({ method: 'GET', path: '/field-schemes', ...t('fields') })
-        .input(ws)
-        .output(z.array(FieldScheme)),
-      create: baseContract
-        .route({ method: 'POST', path: '/field-schemes', ...t('fields') })
-        .input(ws.extend({ name: z.string().min(1).max(120), fieldIds: z.array(Id) }))
-        .output(FieldScheme),
-      update: baseContract
-        .route({ method: 'PATCH', path: '/field-schemes/{id}', ...t('fields') })
-        .input(
-          ws.extend({
-            id: Id,
-            patch: z.object({
-              name: z.string().min(1).max(120).optional(),
-              fieldIds: z.array(Id).optional(),
-            }),
-          }),
-        )
-        .output(FieldScheme),
-      delete: baseContract
-        .route({ method: 'DELETE', path: '/field-schemes/{id}', ...t('fields') })
-        .input(ws.extend({ id: Id }))
-        .output(Ok),
-    },
   },
 
   // ------------------------------------------------------------------ workflows

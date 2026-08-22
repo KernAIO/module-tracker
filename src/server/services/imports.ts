@@ -5,6 +5,7 @@ import {
   type CreateIssue,
   type CsvMapping,
   CsvMapping as CsvMappingSchema,
+  type FieldType,
   type ImportJob,
   type ImportSource,
   type Priority,
@@ -167,9 +168,19 @@ export class ImportService {
     const progress = { total: 0, processed: 0, created: 0, skipped: 0, failed: 0 }
     try {
       const text = await this.fileText(workspaceId, job.fileId)
+      // Every CSV cell is a string, so a custom column needs its field's type to become the value
+      // the field actually holds. Without this a `number` column imports as text: it validates
+      // nowhere, sorts alphabetically, and never matches a numeric KQL comparison.
+      const fieldTypes = new Map(
+        (
+          await this.kernel.database.withWorkspace(workspaceId, (tx) =>
+            this.config.listFields(tx, workspaceId, { projectId: job.projectId }),
+          )
+        ).map((f) => [f.key, f.type] as const),
+      )
       const records =
         job.source === 'csv'
-          ? this.csvRecords(text, CsvMappingSchema.parse(job.mapping ?? {}))
+          ? this.csvRecords(text, CsvMappingSchema.parse(job.mapping ?? {}), fieldTypes)
           : this.jsonRecords(text, job.source as ImportSource)
       progress.total = records.length
       await this.patch(workspaceId, importJobId, { progress })
@@ -248,7 +259,7 @@ export class ImportService {
 
   // ------------------------------------------------------------------ record extraction
 
-  private csvRecords(text: string, mapping: CsvMapping): ImportRecord[] {
+  private csvRecords(text: string, mapping: CsvMapping, fieldTypes: Map<string, FieldType>): ImportRecord[] {
     const rows = parseCsv(text, mapping.delimiter || ',')
     if (!rows.length) return []
     const header = mapping.hasHeader ? rows[0]!.map((h) => h.trim()) : []
@@ -280,7 +291,10 @@ export class ImportService {
       for (const [source, target] of customColumns) {
         const index = mapping.hasHeader ? header.indexOf(source) : Number(source)
         const value = cell(index)
-        if (value) custom[target.slice(3)] = value
+        if (!value) continue
+        const key = target.slice(3)
+        const coerced = coerceCell(value, fieldTypes.get(key))
+        if (coerced !== undefined) custom[key] = coerced
       }
       const labelsCell = cell(indices.labels)
       const estimate = Number(cell(indices.estimate))
@@ -369,4 +383,41 @@ interface ImportRecord {
   externalRef: string | null
   custom: Record<string, unknown>
   sourceKind?: ImportSource
+}
+
+/**
+ * A CSV cell as the field's type. Returns `undefined` when the text cannot be that type, so the
+ * column is left unset rather than imported as something the field can never hold — the row still
+ * imports, and the gap is visible instead of being a wrong value.
+ */
+function coerceCell(text: string, type: FieldType | undefined): unknown {
+  switch (type) {
+    case undefined:
+      // an unmapped key; `issues.create` reports it per row
+      return text
+    case 'number':
+    case 'formula': {
+      const n = Number(text)
+      return Number.isFinite(n) ? n : undefined
+    }
+    case 'checkbox': {
+      const v = text.toLowerCase()
+      if (['true', 'yes', 'y', '1'].includes(v)) return true
+      if (['false', 'no', 'n', '0'].includes(v)) return false
+      return undefined
+    }
+    case 'date':
+    case 'datetime':
+      return Number.isNaN(Date.parse(text)) ? undefined : new Date(text).toISOString()
+    case 'multiselect':
+    case 'multiuser':
+    case 'label':
+    case 'relation':
+      return text
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+    default:
+      return text
+  }
 }

@@ -72,6 +72,7 @@ import {
   uniq,
 } from './db.js'
 import type { NotifyService } from './notify.js'
+import { normaliseCustom } from './values.js'
 
 type UpsertIssueTemplate = z.infer<typeof UpsertIssueTemplateSchema>
 type UpsertRecurringIssue = z.infer<typeof UpsertRecurringIssueSchema>
@@ -231,7 +232,21 @@ export class IssueService {
 
     const description = (data.description ?? null) as RichDoc | null
     const descriptionText = docToText(description)
-    const custom = await this.withFieldDefaults(tx, workspaceId, project.id, data.custom ?? {})
+    const { custom, skipped: skippedRequired } = await normaliseCustom({
+      fields: await this.config.listFields(tx, workspaceId, { projectId: project.id }),
+      current: null,
+      patch: data.custom ?? {},
+      mode: 'create',
+      source: opts.source ?? 'app',
+      memberIds: () => this.workspaceMemberIds(workspaceId),
+    })
+    // An inbound source is allowed to skip a required field rather than bounce the message. Say so
+    // in the log, or an issue arrives incomplete with no record of why.
+    if (skippedRequired.length)
+      this.kernel.log.info(
+        { source: opts.source ?? 'app', fields: skippedRequired.map((p) => p.fieldId) },
+        'tracker: issue created without required custom fields',
+      )
     const watchers = uniq([
       ...(data.watcherIds ?? []),
       ...assigneeIds,
@@ -487,20 +502,17 @@ export class IssueService {
     return chosen.id
   }
 
-  private async withFieldDefaults(
-    tx: Tx,
-    workspaceId: string,
-    projectId: string,
-    custom: Record<string, unknown>,
-  ): Promise<Record<string, unknown>> {
-    const defs = await this.config.listFieldRows(tx, workspaceId, { projectId })
-    const out: Record<string, unknown> = { ...custom }
-    for (const def of defs) {
-      if (out[def.key] === undefined && def.defaultValue != null) out[def.key] = def.defaultValue
-      if (def.required && (out[def.key] === undefined || out[def.key] === null))
-        throw KernError.badRequest(`Custom field "${def.name}" is required`, { field: `cf.${def.key}` })
-    }
-    return out
+  /**
+   * Workspace members, for validating a `user` custom field.
+   *
+   * If core cannot answer, the check is skipped rather than failed: a validation rule that depends
+   * on another service must not make issues unwritable when that service is briefly unavailable.
+   */
+  private async workspaceMemberIds(workspaceId: string): Promise<Set<string> | undefined> {
+    const members = await this.kernel
+      .call<Array<{ userId: string }>>('core.workspaces.members', { workspaceId })
+      .catch(() => null)
+    return members ? new Set(members.map((m) => m.userId)) : undefined
   }
 
   private initialSla(
@@ -728,11 +740,16 @@ export class IssueService {
     if (JSON.stringify(labelIds) !== JSON.stringify(currentLabels)) track('labelIds', currentLabels, labelIds)
 
     if (patch.custom !== undefined) {
-      const merged = { ...((current.custom as Record<string, unknown>) ?? {}) }
-      for (const [key, value] of Object.entries(patch.custom)) {
-        if (value === null) delete merged[key]
-        else merged[key] = value
-      }
+      // Validated on update too, not only on create. Until now an update wrote whatever it was
+      // given: a `select` could be set to a value that was not one of its options.
+      const { custom: merged } = await normaliseCustom({
+        fields: await this.config.listFields(tx, workspaceId, { projectId: current.projectId }),
+        current: (current.custom as Record<string, unknown>) ?? {},
+        patch: patch.custom,
+        mode: 'update',
+        source: 'app',
+        memberIds: () => this.workspaceMemberIds(workspaceId),
+      })
       track('custom', current.custom, merged)
     }
 
