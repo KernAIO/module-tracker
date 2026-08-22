@@ -2675,3 +2675,271 @@ describe('grouping by a custom field', () => {
     expect((result.groups ?? []).reduce((n, g) => n + g.count, 0)).toBe(4)
   })
 })
+
+// =====================================================================================
+
+describe('relation fields', () => {
+  const ws = randomUUID()
+  const admin = () => principal(ALICE, ws)
+  const inRelWs = <T>(fn: (tx: Tx) => Promise<T>) => inWs(ws, admin())(fn)
+  let projectId: string
+  let otherProjectId: string
+  let bugTypeId: string
+  let target: Issue
+  let otherProjectIssue: Issue
+
+  beforeAll(async () => {
+    const project = await inRelWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'REL', name: 'Relations', template: 'software' } as never),
+    )
+    projectId = project.id
+    const other = await inRelWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'OTH', name: 'Other', template: 'simple' } as never),
+    )
+    otherProjectId = other.id
+    const types = await inRelWs((tx) => svc.config.listTypes(tx, ws, { projectId }))
+    bugTypeId = types.find((t) => t.key === 'bug')!.id
+
+    target = await inRelWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'The target', typeId: bugTypeId } as never),
+    )
+    otherProjectIssue = await inRelWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId: otherProjectId, title: 'Elsewhere' } as never),
+    )
+    await inRelWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'caused_by',
+        name: 'Caused by',
+        type: 'relation',
+      } as never),
+    )
+  })
+
+  const create = (custom: Record<string, unknown>) =>
+    inRelWs((tx) => svc.issues.create(tx, admin(), ws, { projectId, title: 'Linker', custom } as never))
+
+  it('stores a link as an array, whatever it was given', async () => {
+    // Always `string[]`, because that is what the KQL compiler compares against.
+    const one = await create({ caused_by: target.id })
+    expect(one.custom.caused_by).toEqual([target.id])
+    const many = await create({ caused_by: [target.id] })
+    expect(many.custom.caused_by).toEqual([target.id])
+  })
+
+  it('refuses a link to an issue that does not exist', async () => {
+    // Otherwise the value is a uuid nothing will ever resolve, rendered as itself for ever.
+    await expect(create({ caused_by: [randomUUID()] })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('honours the kinds of item the field accepts', async () => {
+    const restricted = await inRelWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'blocked_by_bug',
+        name: 'Blocked by a bug',
+        type: 'relation',
+        config: { relationTypeIds: [bugTypeId] },
+      } as never),
+    )
+    expect(restricted.config.relationTypeIds).toEqual([bugTypeId])
+
+    const bug = await create({ blocked_by_bug: [target.id] })
+    expect(bug.custom.blocked_by_bug).toEqual([target.id])
+
+    const story = await inRelWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'A story' } as never),
+    )
+    await expect(create({ blocked_by_bug: [story.id] })).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('honours the projects the field accepts', async () => {
+    await inRelWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'same_project_only',
+        name: 'Same project only',
+        type: 'relation',
+        config: { relationProjectIds: [projectId] },
+      } as never),
+    )
+    await expect(create({ same_project_only: [otherProjectIssue.id] })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+    const ok = await create({ same_project_only: [target.id] })
+    expect(ok.custom.same_project_only).toEqual([target.id])
+  })
+
+  it('refuses more than one link when the field is single-valued', async () => {
+    await inRelWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'one_cause',
+        name: 'One cause',
+        type: 'relation',
+        config: { relationMultiple: false },
+      } as never),
+    )
+    const second = await inRelWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'Second' } as never),
+    )
+    await expect(create({ one_cause: [target.id, second.id] })).rejects.toMatchObject({
+      code: 'BAD_REQUEST',
+    })
+  })
+
+  it('is findable by KQL, which compares it as an array', async () => {
+    const linker = await create({ caused_by: [target.id] })
+    const found = await inRelWs((tx) =>
+      svc.query.query(tx, admin(), {
+        workspaceId: ws as never,
+        kql: `cf.caused_by = "${target.id}"`,
+        projectIds: [projectId],
+        limit: 20,
+        includeArchived: false,
+        include: { total: false, groupCounts: false, full: false },
+      } as never),
+    )
+    expect(found.items.map((i) => i.id)).toContain(linker.id)
+  })
+})
+
+// =====================================================================================
+
+describe('formula fields', () => {
+  const ws = randomUUID()
+  const admin = () => principal(ALICE, ws)
+  const inFmlWs = <T>(fn: (tx: Tx) => Promise<T>) => inWs(ws, admin())(fn)
+  let projectId: string
+
+  beforeAll(async () => {
+    const project = await inFmlWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'FML', name: 'Formulas', template: 'software' } as never),
+    )
+    projectId = project.id
+    await inFmlWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'doubled',
+        name: 'Doubled estimate',
+        type: 'formula',
+        config: { formula: '{estimate} * 2', formulaResult: 'number' },
+      } as never),
+    )
+  })
+
+  it('computes on create and again on update', async () => {
+    const issue = await inFmlWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'Sized', estimate: 5 } as never),
+    )
+    expect(issue.custom.doubled).toBe(10)
+
+    const bigger = await inFmlWs((tx) => svc.issues.update(tx, admin(), ws, issue.id, { estimate: 8 }))
+    expect(bigger.custom.doubled).toBe(16)
+  })
+
+  it('is empty when what it reads is empty, rather than zero', async () => {
+    const issue = await inFmlWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'Unsized' } as never),
+    )
+    expect(issue.custom.doubled).toBeNull()
+  })
+
+  it('ignores a value somebody tries to write into it', async () => {
+    // It is calculated, not entered.
+    const issue = await inFmlWs((tx) =>
+      svc.issues.create(tx, admin(), ws, {
+        projectId,
+        title: 'Faked',
+        estimate: 3,
+        custom: { doubled: 999 },
+      } as never),
+    )
+    expect(issue.custom.doubled).toBe(6)
+  })
+
+  it('reads another formula, computed in the same pass', async () => {
+    await inFmlWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'quadrupled',
+        name: 'Quadrupled',
+        type: 'formula',
+        config: { formula: '{cf.doubled} * 2', formulaResult: 'number' },
+      } as never),
+    )
+    const issue = await inFmlWs((tx) =>
+      svc.issues.create(tx, admin(), ws, { projectId, title: 'Chained', estimate: 2 } as never),
+    )
+    expect(issue.custom.doubled).toBe(4)
+    expect(issue.custom.quadrupled).toBe(8)
+  })
+
+  it('refuses a formula that would calculate itself', async () => {
+    await expect(
+      inFmlWs((tx) =>
+        svc.config.createField(tx, ws, {
+          projectId,
+          key: 'itself',
+          name: 'Itself',
+          type: 'formula',
+          config: { formula: '{cf.itself} + 1' },
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('refuses a formula that cannot be read, and one that is missing', async () => {
+    await expect(
+      inFmlWs((tx) =>
+        svc.config.createField(tx, ws, {
+          projectId,
+          key: 'broken',
+          name: 'Broken',
+          type: 'formula',
+          config: { formula: '({estimate} * 2' },
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+
+    await expect(
+      inFmlWs((tx) =>
+        svc.config.createField(tx, ws, {
+          projectId,
+          key: 'empty_formula',
+          name: 'No formula',
+          type: 'formula',
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('refuses a pattern that will not compile, at save time', async () => {
+    // Otherwise one bad save fails every write to the project instead of the save that caused it.
+    await expect(
+      inFmlWs((tx) =>
+        svc.config.createField(tx, ws, {
+          projectId,
+          key: 'bad_pattern',
+          name: 'Bad pattern',
+          type: 'text',
+          config: { pattern: '([unclosed' },
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('is queryable, because the value is stored like any other', async () => {
+    const found = await inFmlWs((tx) =>
+      svc.query.query(tx, admin(), {
+        workspaceId: ws as never,
+        kql: 'cf.doubled >= 10',
+        projectIds: [projectId],
+        limit: 20,
+        includeArchived: false,
+        include: { total: false, groupCounts: false, full: false },
+      } as never),
+    )
+    expect(found.items.length).toBeGreaterThan(0)
+  })
+})

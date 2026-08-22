@@ -87,6 +87,9 @@ export interface CreateOptions {
 
 const objectRef = (id: string): ObjectRef => ({ module: MODULE_ID, type: 'issue', id })
 
+/** Issue columns a formula may read, so a change to one recomputes the formulas that use it. */
+const FORMULA_TRIGGERS = ['estimate', 'priority', 'startDate', 'dueDate', 'title'] as const
+
 /** Issues and everything attached to them: relations, attachments, links, watchers, history. */
 export class IssueService {
   constructor(
@@ -239,6 +242,14 @@ export class IssueService {
       mode: 'create',
       source: opts.source ?? 'app',
       memberIds: () => this.workspaceMemberIds(workspaceId),
+      issueRefs: (ids) => this.issueRefs(tx, workspaceId, ids),
+      systemValues: {
+        estimate: data.estimate ?? null,
+        priority: data.priority ?? 'none',
+        startDate: data.startDate ?? null,
+        dueDate: data.dueDate ?? null,
+        title: data.title,
+      },
     })
     // An inbound source is allowed to skip a required field rather than bounce the message. Say so
     // in the log, or an issue arrives incomplete with no record of why.
@@ -508,6 +519,20 @@ export class IssueService {
    * If core cannot answer, the check is skipped rather than failed: a validation rule that depends
    * on another service must not make issues unwritable when that service is briefly unavailable.
    */
+  /** The issues a `relation` value names, for checking a link is real and allowed. */
+  private async issueRefs(
+    tx: Tx,
+    workspaceId: string,
+    ids: string[],
+  ): Promise<Map<string, { typeId: string; projectId: string }>> {
+    if (!ids.length) return new Map()
+    const rows = await tx
+      .select({ id: issues.id, typeId: issues.typeId, projectId: issues.projectId })
+      .from(issues)
+      .where(and(eq(issues.workspaceId, workspaceId), inArray(issues.id, ids)))
+    return new Map(rows.map((r) => [r.id, { typeId: r.typeId, projectId: r.projectId }]))
+  }
+
   private async workspaceMemberIds(workspaceId: string): Promise<Set<string> | undefined> {
     const members = await this.kernel
       .call<Array<{ userId: string }>>('core.workspaces.members', { workspaceId })
@@ -739,16 +764,32 @@ export class IssueService {
     labelIds = await this.enforceLabelGroups(tx, workspaceId, labelIds)
     if (JSON.stringify(labelIds) !== JSON.stringify(currentLabels)) track('labelIds', currentLabels, labelIds)
 
-    if (patch.custom !== undefined) {
+    // A formula reads the issue's own columns, so changing an estimate has to recompute one — which
+    // means the custom values are revisited even when the patch never mentions them.
+    const fieldDefsForProject =
+      patch.custom !== undefined || FORMULA_TRIGGERS.some((key) => patch[key] !== undefined)
+        ? await this.config.listFields(tx, workspaceId, { projectId: current.projectId })
+        : []
+    const recompute = patch.custom !== undefined || fieldDefsForProject.some((f) => f.type === 'formula')
+
+    if (recompute) {
       // Validated on update too, not only on create. Until now an update wrote whatever it was
       // given: a `select` could be set to a value that was not one of its options.
       const { custom: merged } = await normaliseCustom({
-        fields: await this.config.listFields(tx, workspaceId, { projectId: current.projectId }),
+        fields: fieldDefsForProject,
         current: (current.custom as Record<string, unknown>) ?? {},
-        patch: patch.custom,
+        patch: patch.custom ?? {},
         mode: 'update',
         source: 'app',
         memberIds: () => this.workspaceMemberIds(workspaceId),
+        issueRefs: (ids) => this.issueRefs(tx, workspaceId, ids),
+        systemValues: {
+          estimate: patch.estimate ?? current.estimate,
+          priority: patch.priority ?? current.priority,
+          startDate: patch.startDate ?? current.startDate,
+          dueDate: patch.dueDate ?? current.dueDate,
+          title: patch.title ?? current.title,
+        },
       })
       track('custom', current.custom, merged)
     }

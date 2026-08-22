@@ -13,6 +13,7 @@ import {
 import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import {
+  type FieldConfig,
   type FieldDef,
   HierarchyRules,
   ProjectTemplateBody,
@@ -26,6 +27,7 @@ import {
   type WorkflowScheme,
   type WorkItemType,
 } from '../../contract/models.js'
+import { formulaReferences, validateFormula } from '../formula.js'
 import {
   fieldDefs,
   hierarchyRules,
@@ -353,6 +355,59 @@ export class ConfigService {
     return [...seen.values()]
   }
 
+  /**
+   * Check a field's configuration before it is stored.
+   *
+   * Two things are compiled here rather than at value-check time, because both are supplied by an
+   * administrator and both would otherwise fail on every write to the project instead of on the one
+   * save that introduced them: a text `pattern`, and a `formula`.
+   *
+   * A formula that reaches itself is refused. Since a formula reads only its own issue, a cycle is
+   * a closed walk over the fields it names — no graph over rows, just over definitions.
+   */
+  private async assertFieldConfigValid(
+    tx: Tx,
+    workspaceId: string,
+    field: { key: string; type: string; config?: FieldConfig | null },
+  ): Promise<void> {
+    const config = field.config ?? {}
+    if (config.pattern)
+      try {
+        new RegExp(config.pattern)
+      } catch {
+        throw KernError.badRequest('That is not a valid pattern', { field: 'config.pattern' })
+      }
+
+    if (field.type !== 'formula') return
+    const formula = config.formula
+    if (!formula?.trim())
+      throw KernError.badRequest('A calculated field needs a formula', { field: 'config.formula' })
+    const checked = validateFormula(formula)
+    if (!checked.ok)
+      throw KernError.badRequest(checked.problems[0]?.message ?? 'That formula cannot be read', {
+        field: 'config.formula',
+        problems: checked.problems,
+      })
+
+    const byKey = new Map((await this.listFields(tx, workspaceId, {})).map((f) => [f.key, f] as const))
+    const seen = new Set<string>()
+    const walk = (key: string, source: string): void => {
+      if (seen.has(key)) return
+      seen.add(key)
+      for (const reference of formulaReferences(source)) {
+        if (!reference.startsWith('cf.')) continue
+        const name = reference.slice(3)
+        if (name === field.key)
+          throw KernError.badRequest('That formula would end up calculating itself', {
+            field: 'config.formula',
+          })
+        const referenced = byKey.get(name)
+        if (referenced?.type === 'formula' && referenced.config.formula) walk(name, referenced.config.formula)
+      }
+    }
+    walk(field.key, formula)
+  }
+
   async createField(tx: Tx, workspaceId: string, input: UpsertFieldDef): Promise<FieldDef> {
     const [clash] = await tx
       .select({ id: fieldDefs.id })
@@ -368,6 +423,7 @@ export class ConfigService {
       )
       .limit(1)
     if (clash) throw KernError.conflict(`Field key "${input.key}" is already used`, 'tracker.field.key_taken')
+    await this.assertFieldConfigValid(tx, workspaceId, input)
     const [row] = await tx
       .insert(fieldDefs)
       .values({
@@ -397,6 +453,21 @@ export class ConfigService {
     id: string,
     patch: Partial<Omit<UpsertFieldDef, 'key' | 'type'>>,
   ): Promise<FieldDef> {
+    // The same checks as on create: an edit is the other way a bad pattern or a self-referring
+    // formula gets in, and it would then fail on every write to the project rather than here.
+    if (patch.config) {
+      const [existing] = await tx
+        .select({ key: fieldDefs.key, type: fieldDefs.type })
+        .from(fieldDefs)
+        .where(and(eq(fieldDefs.workspaceId, workspaceId), eq(fieldDefs.id, id)))
+        .limit(1)
+      if (!existing) throw KernError.notFound('Field')
+      await this.assertFieldConfigValid(tx, workspaceId, {
+        key: existing.key,
+        type: existing.type,
+        config: patch.config,
+      })
+    }
     const [row] = await tx
       .update(fieldDefs)
       .set({

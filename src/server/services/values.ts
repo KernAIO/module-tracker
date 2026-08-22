@@ -1,5 +1,6 @@
 import { KernError } from '@kernhq/kernel'
 import type { FieldDef } from '../../contract/models.js'
+import { type FormulaValue, runFormula } from '../formula.js'
 
 /** Why a value was rejected, in terms the interface can put next to the field. */
 export interface ValueProblem {
@@ -132,8 +133,15 @@ export async function normaliseCustom(args: {
   source: string
   /** resolves the workspace members a `user` field may name; omitted or undefined → not checked */
   memberIds?: () => Promise<Set<string> | undefined>
+  /**
+   * Looks up the issues a `relation` field names, so a link can be checked against the field's
+   * `relationTypeIds` / `relationProjectIds`. Omitted → the targets are taken on trust.
+   */
+  issueRefs?: (ids: string[]) => Promise<Map<string, { typeId: string; projectId: string }>>
   /** required fields to enforce, as `cf.<key>`; omitted → the field definitions' own `required` */
   requiredFieldIds?: Set<string>
+  /** the issue's own columns (`estimate`, `dueDate`…), which a formula may read */
+  systemValues?: Record<string, unknown>
 }): Promise<{ custom: Record<string, unknown>; skipped: ValueProblem[] }> {
   const byKey = new Map(args.fields.map((f) => [f.key, f]))
   const out: Record<string, unknown> = args.mode === 'create' ? {} : { ...(args.current ?? {}) }
@@ -154,12 +162,39 @@ export async function normaliseCustom(args: {
     }
     const problem = checkValue(def, value, { memberIds: members })
     if (problem) throw KernError.badRequest(problem, { field: `cf.${key}` })
+
+    if (def.type === 'relation' && args.issueRefs) {
+      const ids = (Array.isArray(value) ? value : [value]).filter((v): v is string => typeof v === 'string')
+      const found = ids.length ? await args.issueRefs(ids) : new Map()
+      for (const id of ids) {
+        const target = found.get(id)
+        // A link to an issue that does not exist is not a link; it is a value nothing will ever
+        // resolve, and it would render as a raw uuid for ever.
+        if (!target) throw KernError.badRequest('That issue does not exist', { field: `cf.${key}` })
+        const types = def.config.relationTypeIds
+        if (types?.length && !types.includes(target.typeId))
+          throw KernError.badRequest('That is not a kind of item this field accepts', {
+            field: `cf.${key}`,
+          })
+        const projects = def.config.relationProjectIds
+        if (projects?.length && !projects.includes(target.projectId))
+          throw KernError.badRequest('That issue is not in a project this field accepts', {
+            field: `cf.${key}`,
+          })
+      }
+      // Stored as an array either way, which is what the KQL compiler expects.
+      out[key] = ids
+      continue
+    }
+
     out[key] = value
   }
 
   if (args.mode === 'create')
     for (const def of args.fields)
       if (out[def.key] === undefined && def.defaultValue != null) out[def.key] = def.defaultValue
+
+  applyFormulas(args.fields, out, args.systemValues ?? {})
 
   const lenient = LENIENT_SOURCES.has(args.source)
   // On update, judge only the fields this patch touched. An issue created leniently — a customer
@@ -177,4 +212,34 @@ export async function normaliseCustom(args: {
   }
 
   return { custom: out, skipped: problems }
+}
+
+/**
+ * Compute every formula field over the values this issue now holds.
+ *
+ * A formula reads the same issue and nothing else, so this is one pass with no ordering problem to
+ * solve: a formula that reads another formula reads the value that pass computed, and a cycle is
+ * refused when the field is saved rather than being chased at write time.
+ *
+ * A submitted value for a formula field is discarded. It is computed, not entered.
+ */
+function applyFormulas(
+  fields: FieldDef[],
+  custom: Record<string, unknown>,
+  systemValues: Record<string, unknown>,
+): void {
+  const formulas = fields.filter((f) => f.type === 'formula' && f.config.formula)
+  if (!formulas.length) return
+
+  const read = (name: string): FormulaValue => {
+    const value = name.startsWith('cf.') ? custom[name.slice(3)] : systemValues[name]
+    if (value === null || value === undefined) return null
+    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') return value
+    return null
+  }
+
+  // Two passes, so a formula that reads another formula sees a computed value rather than the
+  // previous one. Cycles cannot occur — they are refused at save time — so two is enough.
+  for (let pass = 0; pass < 2; pass++)
+    for (const field of formulas) custom[field.key] = runFormula(field.config.formula!, read)
 }
