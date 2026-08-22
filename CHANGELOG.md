@@ -1,5 +1,12 @@
 # @kernhq/module-tracker
 
+## 0.4.1
+
+### Patch Changes
+
+- c7fb44a: Export `ProjectTemplate` from `@kernhq/module-tracker/client`, so a chooser can name what
+  `projects.templates.list` returns.
+
 ## 0.4.0
 
 ### Minor Changes
