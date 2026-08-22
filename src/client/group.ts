@@ -27,7 +27,7 @@ export interface GroupContext {
   statusOrder(statusId: string): number
   statusCategory(statusId: string): StatusCategory
   /** display order for the remaining reference fields; unknown ids sort last */
-  order?(groupBy: GroupBy, key: string): number
+  order?(groupBy: string, key: string): number
 }
 
 type Groupable = Pick<
@@ -50,8 +50,23 @@ type Groupable = Pick<
   | 'rank'
 >
 
+/** `cf.<key>` names a custom field; every other group key is one of the built-in ones. */
+const CUSTOM_GROUP = /^cf\.([a-z][a-z0-9_]*)$/
+
 /** Every group an issue belongs to under `groupBy`. Multi-valued fields yield more than one. */
-export function groupKeysOf(issue: Groupable, groupBy: GroupBy): GroupKey[] {
+export function groupKeysOf(issue: Groupable, groupBy: string): GroupKey[] {
+  const custom = CUSTOM_GROUP.exec(groupBy)
+  if (custom) {
+    const value = (issue as { custom?: Record<string, unknown> }).custom?.[custom[1]!]
+    // A multi-valued field puts the issue in every column it names, the way a label does.
+    if (Array.isArray(value)) {
+      const keys = value.filter((v): v is string => typeof v === 'string')
+      return keys.length ? keys : [null]
+    }
+    if (typeof value === 'string' && value) return [value]
+    if (typeof value === 'number' || typeof value === 'boolean') return [String(value)]
+    return [null]
+  }
   switch (groupBy) {
     case 'status':
       return [issue.statusId]
@@ -87,7 +102,7 @@ export function groupKeysOf(issue: Groupable, groupBy: GroupBy): GroupKey[] {
 }
 
 /** Sort weight for a group heading. Lower comes first; the "no value" group always goes last. */
-export function groupOrder(key: GroupKey, groupBy: GroupBy, ctx: GroupContext): number {
+export function groupOrder(key: GroupKey, groupBy: string, ctx: GroupContext): number {
   if (key === null) return Number.MAX_SAFE_INTEGER
   switch (groupBy) {
     case 'status':
@@ -111,7 +126,8 @@ export function groupOrder(key: GroupKey, groupBy: GroupBy, ctx: GroupContext): 
  */
 export function groupIssues<T extends Groupable>(
   issues: readonly T[],
-  groupBy: GroupBy,
+  /** a built-in group key or `cf.<key>` */
+  groupBy: string,
   ctx: GroupContext,
   opts: { alwaysShow?: readonly GroupKey[]; compare?: (a: T, b: T) => number } = {},
 ): Array<IssueGroup<T>> {

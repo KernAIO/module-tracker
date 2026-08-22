@@ -2517,3 +2517,74 @@ describe('project templates', () => {
     expect(applied).toBeNull()
   })
 })
+
+// =====================================================================================
+
+describe('grouping by a custom field', () => {
+  const ws = randomUUID()
+  const admin = () => principal(ALICE, ws)
+  const inGroupWs = <T>(fn: (tx: Tx) => Promise<T>) => inWs(ws, admin())(fn)
+  let projectId: string
+
+  beforeAll(async () => {
+    const project = await inGroupWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'GRP', name: 'Grouping', template: 'software' } as never),
+    )
+    projectId = project.id
+    await inGroupWs((tx) =>
+      svc.config.createField(tx, ws, {
+        projectId,
+        key: 'squad',
+        name: 'Squad',
+        type: 'multiselect',
+        options: [
+          { id: 'core', label: 'Core', color: null, order: 0, archived: false },
+          { id: 'growth', label: 'Growth', color: null, order: 1, archived: false },
+        ],
+      } as never),
+    )
+    const seed: Array<Record<string, unknown>> = [
+      { title: 'One', custom: { severity: 's1', squad: ['core'] } },
+      { title: 'Two', custom: { severity: 's1', squad: ['core', 'growth'] } },
+      { title: 'Three', custom: { severity: 's3' } },
+      { title: 'Four', custom: {} },
+    ]
+    for (const values of seed)
+      await inGroupWs((tx) => svc.issues.create(tx, admin(), ws, { projectId, ...values } as never))
+  })
+
+  const counts = (groupBy: string) =>
+    inGroupWs((tx) =>
+      svc.query.query(tx, admin(), {
+        workspaceId: ws as never,
+        kql: '',
+        projectIds: [projectId],
+        groupBy,
+        limit: 100,
+        includeArchived: false,
+        include: { total: false, groupCounts: true, full: false },
+      } as never),
+    )
+
+  it('counts issues under each value of a single-valued field', async () => {
+    const result = await counts('cf.severity')
+    const byKey = new Map((result.groups ?? []).map((g) => [g.key, g.count]))
+    expect(byKey.get('s1')).toBe(2)
+    expect(byKey.get('s3')).toBe(1)
+    // an issue with no value groups under nothing, the way an unassigned issue does
+    expect(byKey.get(null)).toBe(1)
+  })
+
+  it('counts an issue under each value of a multi-valued field', async () => {
+    // The same rule labels follow: two squads means the issue appears in both columns.
+    const result = await counts('cf.squad')
+    const byKey = new Map((result.groups ?? []).map((g) => [g.key, g.count]))
+    expect(byKey.get('core')).toBe(2)
+    expect(byKey.get('growth')).toBe(1)
+  })
+
+  it('still groups by a built-in key', async () => {
+    const result = await counts('status')
+    expect((result.groups ?? []).reduce((n, g) => n + g.count, 0)).toBe(4)
+  })
+})

@@ -61,6 +61,9 @@ const SCALAR_GROUPS: Partial<Record<GroupBy, SQL>> = {
   createdAt: sql`${issues.createdAt}::date::text`,
 }
 
+/** `cf.<key>` names a custom field; anything else is one of the built-in keys above. */
+const CUSTOM_GROUP = /^cf\.([a-z][a-z0-9_]*)$/
+
 const DEFAULT_ORDER: OrderBy[] = [{ field: 'rank', dir: 'asc' }]
 
 const encodeCursor = (offset: number) => Buffer.from(JSON.stringify({ o: offset })).toString('base64url')
@@ -213,14 +216,44 @@ export class QueryService {
   private async groupCounts(
     tx: Tx,
     condition: SQL,
-    groupBy: GroupBy,
+    groupBy: string,
   ): Promise<Array<{ key: string | null; count: number; estimate: number | null }>> {
-    const arrayColumn = ARRAY_GROUPS[groupBy]
+    // Grouping by a custom field: the value lives in `issues.custom`, and a multi-valued field is
+    // an array there, so an issue with two of them counts under each — the same way a label does.
+    const custom = CUSTOM_GROUP.exec(groupBy)
+    if (custom) {
+      const key = custom[1]!
+      const value = sql`${issues.custom} -> ${key}`
+      // The set-returning function has to be the FROM item itself: Postgres refuses one inside a
+      // CASE. So the value is normalised to an array first and unnested afterwards, and an empty
+      // array becomes `[null]` so the issue counts as "no value" rather than vanishing.
+      const statement = sql`
+        select g.key::text as key, count(*)::int as count, sum(${issues.estimate}) as estimate
+          from ${issues},
+            lateral jsonb_array_elements_text(
+              case
+                when jsonb_typeof(${value}) = 'array' then
+                  case when jsonb_array_length(${value}) = 0 then '[null]'::jsonb else ${value} end
+                else jsonb_build_array(${value})
+              end
+            ) as g(key)
+         where ${condition}
+         group by 1
+         order by 2 desc`
+      const rows = await tx.execute<{ key: string | null; count: number; estimate: string | null }>(statement)
+      return rows.rows.map((r) => ({
+        key: r.key ?? null,
+        count: Number(r.count),
+        estimate: r.estimate === null ? null : Number(r.estimate),
+      }))
+    }
+
+    const arrayColumn = ARRAY_GROUPS[groupBy as GroupBy]
     const statement = arrayColumn
       ? sql`select g.key::text as key, count(*)::int as count, sum(${issues.estimate}) as estimate
             from ${issues}, lateral unnest(${arrayColumn}) as g(key)
             where ${condition} group by 1 order by 2 desc`
-      : sql`select ${SCALAR_GROUPS[groupBy] ?? sql`null::text`} as key, count(*)::int as count, sum(${issues.estimate}) as estimate
+      : sql`select ${SCALAR_GROUPS[groupBy as GroupBy] ?? sql`null::text`} as key, count(*)::int as count, sum(${issues.estimate}) as estimate
             from ${issues} where ${condition} group by 1 order by 2 desc`
     const rows = await tx.execute<{ key: string | null; count: number; estimate: string | null }>(statement)
     return rows.rows.map((r) => ({

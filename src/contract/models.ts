@@ -1258,7 +1258,8 @@ export const IssueQueryInput = z.object({
   /** restrict to these projects (ACL is applied regardless) */
   projectIds: z.array(Id).optional(),
   orderBy: z.array(OrderBy).optional(),
-  groupBy: GroupBy.optional(),
+  /** a built-in key or `cf.<key>`, the same vocabulary views use */
+  groupBy: GroupByValue.optional(),
   cursor: z.string().optional(),
   limit: z.number().int().min(1).max(500).default(100),
   includeArchived: z.boolean().default(false),
