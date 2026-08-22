@@ -1,0 +1,73 @@
+{
+  "name": "@kernalo/module-tracker",
+  "version": "0.1.0",
+  "description": "Kern tracker module: projects, work item types, custom fields, workflows, issues, KQL, cycles, views, reports, intake, time tracking (server + client skeleton)",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/KernALO/modules",
+    "directory": "packages/tracker"
+  },
+  "publishConfig": {
+    "access": "restricted",
+    "registry": "https://npm.pkg.github.com"
+  },
+  "files": [
+    "dist",
+    "migrations",
+    "src/client",
+    "docs"
+  ],
+  "exports": {
+    "./contract": {
+      "types": "./dist/contract/index.d.ts",
+      "import": "./dist/contract/index.js"
+    },
+    "./kql": {
+      "types": "./dist/kql/index.d.ts",
+      "import": "./dist/kql/index.js"
+    },
+    "./server": {
+      "types": "./dist/server/index.d.ts",
+      "import": "./dist/server/index.js"
+    },
+    "./client": {
+      "types": "./src/client/index.ts",
+      "svelte": "./src/client/index.ts",
+      "default": "./src/client/index.ts"
+    },
+    "./client/*": {
+      "types": "./src/client/*",
+      "svelte": "./src/client/*",
+      "default": "./src/client/*"
+    },
+    "./migrations": "./migrations"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
+    "lint": "biome check .",
+    "test": "vitest run",
+    "test:unit": "vitest run --exclude 'src/**/*.int.test.ts'",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@kernalo/contracts": "^0.1.0",
+    "@kernalo/kernel": "^0.1.0",
+    "@kernalo/workflow": "^0.1.0",
+    "@orpc/contract": "^1.15.0",
+    "@orpc/server": "^1.15.0",
+    "drizzle-orm": "^0.45.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.15.0",
+    "drizzle-kit": "^0.31.0",
+    "pg": "^8.16.0",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}
