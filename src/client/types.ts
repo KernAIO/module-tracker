@@ -1,0 +1,57 @@
+/**
+ * The contract types a tracker UI works with, re-exported for hosts.
+ *
+ * Types only: nothing here survives compilation, so importing this file never pulls the zod schemas
+ * (or the server contract) into a browser bundle. Anything that needs the schemas at runtime should
+ * import `@kernhq/module-tracker/contract` instead.
+ */
+
+export type {
+  ApprovalState,
+  Attachment,
+  AvailableTransition,
+  BoardColumn,
+  Comment,
+  Component,
+  CreateIssue,
+  Cycle,
+  CycleStatus,
+  DateOnly,
+  EstimateUnit,
+  FieldDef,
+  FieldOption,
+  FieldType,
+  GroupBy,
+  Issue,
+  IssueHistoryEntry,
+  IssueKey,
+  IssueQueryInput,
+  IssueQueryResult,
+  IssueSummary,
+  KqlFieldInfo,
+  KqlParseResult,
+  KqlSuggestion,
+  Label,
+  Link,
+  Milestone,
+  OrderBy,
+  Priority,
+  Project,
+  ProjectKey,
+  ProjectMember,
+  ReactionSummary,
+  RelationSummary,
+  RelationType,
+  RelationView,
+  RichDoc,
+  StatusCategory,
+  StatusHistoryEntry,
+  StatusInfo,
+  UpdateIssue,
+  Version,
+  View,
+  ViewDisplay,
+  ViewLayout,
+  Workflow,
+  WorkItemType,
+} from '../contract/models.js'
