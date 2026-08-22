@@ -23,6 +23,8 @@ export type {
   FieldOption,
   FieldType,
   GroupBy,
+  IntakeForm,
+  IntakeSubmission,
   Issue,
   IssueApproval,
   IssueHistoryEntry,
