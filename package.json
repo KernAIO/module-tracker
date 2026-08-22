@@ -1,6 +1,6 @@
 {
   "name": "@kernhq/module-tracker",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Kern tracker module: projects, work item types, custom fields, workflows, issues, KQL, cycles, views, reports, intake, time tracking (server + client skeleton)",
   "license": "AGPL-3.0-only",
   "type": "module",

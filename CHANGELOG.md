@@ -1,5 +1,12 @@
 # @kernhq/module-tracker
 
+## 0.7.3
+
+### Patch Changes
+
+- 6873dbd: Export `IntakeForm` and `IntakeSubmission` from `@kernhq/module-tracker/client`, so the page a
+  stranger fills in can name what it renders and what it sends.
+
 ## 0.7.2
 
 ### Patch Changes
