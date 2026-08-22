@@ -1,5 +1,15 @@
 # @kernhq/module-tracker
 
+## 0.7.2
+
+### Patch Changes
+
+- 75b57ab: `formatDuration` keeps minutes below a day.
+
+  It rounded to whole hours, so ninety logged minutes read as "2h" and a timer running for twenty read
+  as "0h". For an estimate that is a rounding; for time somebody actually tracked it is wrong, and the
+  same function shows both. Above a day minutes stop being the point and are still dropped.
+
 ## 0.7.1
 
 ### Patch Changes
