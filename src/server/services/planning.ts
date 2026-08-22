@@ -624,7 +624,10 @@ export class PlanningService {
     const rows = await tx.execute<{ id: string; n: number }>(sql`
       select v.id, count(i.id)::int as n
       from unnest(${sql.param(ids)}::uuid[]) as v(id)
-      left join ${issues} i on v.id = any(i.${sql.raw(column)}) and i.archived_at is null
+      left join ${issues} i
+        on v.id = any(i.${sql.raw(column)})
+        and i.workspace_id = ${workspaceId}::uuid
+        and i.archived_at is null
       group by v.id`)
     for (const row of rows.rows) out.set(row.id, Number(row.n))
     return out
