@@ -26,6 +26,8 @@ let databaseUrl: string
 
 const WS_A = randomUUID()
 const WS_B = randomUUID()
+const REVIEWERS_GROUP = randomUUID()
+const REVIEWER_ROLE = randomUUID()
 const ALICE = randomUUID()
 const BOB = randomUUID()
 const CAROL = randomUUID()
@@ -76,9 +78,25 @@ function registerCoreStubs(k: Kernel) {
       }),
     },
     'workspaces.members': {
+      // core answers with each member's groups and roles, which is how the tracker expands an
+      // approval addressed to a group without a call of its own
       handler: async () => [
-        { userId: ALICE, email: 'alice@example.test', name: 'Alice' },
-        { userId: BOB, email: 'bob@example.test', name: 'Bob' },
+        {
+          userId: ALICE,
+          email: 'alice@example.test',
+          name: 'Alice',
+          role: 'admin',
+          roleIds: [],
+          groupIds: [],
+        },
+        {
+          userId: BOB,
+          email: 'bob@example.test',
+          name: 'Bob',
+          role: 'member',
+          roleIds: [REVIEWER_ROLE],
+          groupIds: [REVIEWERS_GROUP],
+        },
       ],
     },
     'modules.isEnabled': { handler: async () => true },
@@ -2280,5 +2298,98 @@ describe('comment attachments', () => {
     await forbidden(
       inWs(WS_A, guest())((tx) => svc.issues.addAttachments(tx, guest(), WS_A, issueId, [randomUUID()])),
     )
+  })
+})
+
+// =====================================================================================
+
+describe('approvals addressed to a group or a role', () => {
+  let projectId: string
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'APR', name: 'Approve', template: 'software' } as never),
+    )
+    projectId = project.id
+  })
+
+  const flowFor = async (name: string, approver: { kind: string; id: string }) => {
+    const workflow = await run((tx) =>
+      svc.config.createWorkflow(tx, WS_A, {
+        projectId,
+        name,
+        definition: {
+          id: name,
+          name,
+          statuses: [
+            { id: 'open', name: 'Open', category: 'todo', order: 0, initial: true },
+            { id: 'shipped', name: 'Shipped', category: 'done', order: 1 },
+          ],
+          transitions: [
+            {
+              id: 'ship',
+              name: 'Ship',
+              from: ['open'],
+              to: 'shipped',
+              approval: { approvers: [approver], minApprovals: 1 },
+            },
+          ],
+        } as never,
+      }),
+    )
+    const type = await run((tx) =>
+      svc.config.createType(
+        tx,
+        WS_A,
+        { projectId, key: name, name, level: 0, workflowId: workflow.id } as never,
+        ALICE,
+      ),
+    )
+    return run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, { projectId, title: name, typeId: type.id } as never),
+    )
+  }
+
+  it('lets a member of the approving group decide', async () => {
+    // A group used to resolve to nobody, so the approval could never be granted and the transition
+    // was stuck for good.
+    const issue = await flowFor('group_flow', { kind: 'group', id: REVIEWERS_GROUP })
+    const parked = await run((tx) =>
+      svc.transitions.apply(tx, alice(), WS_A, issue.id, { transitionId: 'ship' }),
+    )
+    expect(parked.approval).toBeTruthy()
+    expect(parked.issue.statusId).toBe('open')
+
+    // Alice is not in the group; Bob is
+    await expect(
+      run((tx) => svc.transitions.decide(tx, alice(), WS_A, issue.id, 'ship', 'approve')),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+    const decided = await inWs(
+      WS_A,
+      bob(),
+    )((tx) => svc.transitions.decide(tx, bob(), WS_A, issue.id, 'ship', 'approve'))
+    expect(decided.approval.state.status).toBe('approved')
+    expect(decided.issue?.statusId).toBe('shipped')
+  })
+
+  it('lets somebody holding the approving role decide', async () => {
+    const issue = await flowFor('role_flow', { kind: 'role', id: REVIEWER_ROLE })
+    await run((tx) => svc.transitions.apply(tx, alice(), WS_A, issue.id, { transitionId: 'ship' }))
+    const decided = await inWs(
+      WS_A,
+      bob(),
+    )((tx) => svc.transitions.decide(tx, bob(), WS_A, issue.id, 'ship', 'approve'))
+    expect(decided.issue?.statusId).toBe('shipped')
+  })
+
+  it('matches a built-in role by name', async () => {
+    const issue = await flowFor('builtin_flow', { kind: 'role', id: 'admin' })
+    const parked = await run((tx) =>
+      svc.transitions.apply(tx, alice(), WS_A, issue.id, { transitionId: 'ship' }),
+    )
+    expect(parked.approval).toBeTruthy()
+    const decided = await run((tx) => svc.transitions.decide(tx, alice(), WS_A, issue.id, 'ship', 'approve'))
+    expect(decided.issue?.statusId).toBe('shipped')
   })
 })

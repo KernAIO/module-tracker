@@ -98,7 +98,8 @@ export class TransitionService {
       resolveSubject: async (subject: Subject): Promise<readonly string[]> => {
         if (subject.kind === 'projectLead') return project.leadId ? [project.leadId] : []
         if (subject.kind === 'user' && subject.id) return [subject.id]
-        // groups and custom roles live in core; the tracker cannot expand them locally
+        if ((subject.kind === 'group' || subject.kind === 'role') && subject.id)
+          return this.subjectMembers(project.workspaceId, subject.kind, subject.id)
         return []
       },
       subitems: async () => {
@@ -106,6 +107,40 @@ export class TransitionService {
         return rows.map((r) => ({ id: r.id, statusCategory: r.statusCategory as never }))
       },
     }
+  }
+
+  /**
+   * The people behind a group or a role.
+   *
+   * Groups and roles live in core, but core's member list already carries each member's `groupIds`
+   * and `roleIds`, so the tracker expands them from that rather than needing a call of its own.
+   * A role id matches either a custom role or a built-in one (`owner`, `admin`, `member`, `guest`).
+   *
+   * An approval addressed to a group used to resolve to nobody, which meant it could never be
+   * granted and the transition was stuck for good.
+   */
+  private async subjectMembers(
+    workspaceId: string,
+    kind: 'group' | 'role',
+    id: string,
+  ): Promise<readonly string[]> {
+    const members = await this.kernel
+      .call<Array<{ userId: string; role?: string; roleIds?: string[]; groupIds?: string[] }>>(
+        'core.workspaces.members',
+        { workspaceId },
+      )
+      .catch(() => null)
+    // Returning nobody on a failed call would silently make an approval unsatisfiable, so say so.
+    if (!members)
+      throw KernError.conflict(
+        'Cannot resolve the approvers for this transition right now',
+        'tracker.approvers_unavailable',
+      )
+    return members
+      .filter((m) =>
+        kind === 'group' ? (m.groupIds ?? []).includes(id) : (m.roleIds ?? []).includes(id) || m.role === id,
+      )
+      .map((m) => m.userId)
   }
 
   private async context(
