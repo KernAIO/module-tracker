@@ -1,5 +1,12 @@
 # @kernhq/module-tracker
 
+## 0.3.2
+
+### Patch Changes
+
+- 3ffd733: Export `IssueApproval` from `@kernhq/module-tracker/client`, so an interface can name what
+  `approvals.list` returns.
+
 ## 0.3.1
 
 ### Patch Changes
