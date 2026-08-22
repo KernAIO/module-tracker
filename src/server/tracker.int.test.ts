@@ -1694,3 +1694,109 @@ describe('contract conformance', () => {
     ).toBe(true)
   })
 })
+
+// =====================================================================================
+
+describe('configuration authorisation', () => {
+  /**
+   * Issue templates and recurring rules decide what everyone else's issues look like, and watchers
+   * decide whose inbox an issue lands in. None of them are ordinary issue content, so viewing an
+   * issue must not be enough to change them. Each case below is a hole this suite exists to keep
+   * closed: before these guards a guest could rewrite a project's templates, schedule issues into
+   * it, or silently unsubscribe the reporter.
+   */
+  let projectId: string
+  let issueId: string
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, {
+        key: 'AUZ',
+        name: 'Authorisation',
+        template: 'simple',
+        memberIds: [BOB, CAROL],
+      } as never),
+    )
+    projectId = project.id
+    const issue = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, { projectId, title: 'Guarded' } as CreateIssue),
+    )
+    issueId = issue.id
+  })
+
+  const forbidden = (p: Promise<unknown>) => expect(p).rejects.toMatchObject({ code: 'FORBIDDEN' })
+
+  it('lets only project managers create, edit and delete issue templates', async () => {
+    await forbidden(
+      run((tx) => svc.issues.createTemplate(tx, guest(), WS_A, { projectId, name: 'Sneaky' } as never)),
+    )
+    const template = await run((tx) =>
+      svc.issues.createTemplate(tx, alice(), WS_A, { projectId, name: 'Bug report' } as never),
+    )
+    await forbidden(
+      run((tx) => svc.issues.updateTemplate(tx, guest(), WS_A, template.id, { name: 'Hijacked' })),
+    )
+    await forbidden(run((tx) => svc.issues.deleteTemplate(tx, guest(), WS_A, template.id)))
+    const renamed = await run((tx) =>
+      svc.issues.updateTemplate(tx, alice(), WS_A, template.id, { name: 'Defect report' }),
+    )
+    expect(renamed.name).toBe('Defect report')
+    await run((tx) => svc.issues.deleteTemplate(tx, alice(), WS_A, template.id))
+  })
+
+  it('hides templates of projects the caller cannot see', async () => {
+    const secret = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, {
+        key: 'AZS',
+        name: 'Authorisation secret',
+        template: 'simple',
+        visibility: 'private',
+        memberIds: [],
+      } as never),
+    )
+    await run((tx) =>
+      svc.issues.createTemplate(tx, alice(), WS_A, { projectId: secret.id, name: 'Private' } as never),
+    )
+    await run((tx) => svc.issues.createTemplate(tx, alice(), WS_A, { name: 'Shared' } as never))
+    const seen = await run((tx) => svc.issues.listTemplates(tx, guest(), WS_A))
+    expect(seen.map((t) => t.name)).toContain('Shared')
+    expect(seen.map((t) => t.name)).not.toContain('Private')
+  })
+
+  it('lets only project managers schedule recurring issues', async () => {
+    const rule = { freq: 'weekly', interval: 1 }
+    await forbidden(
+      run((tx) =>
+        svc.issues.createRecurring(tx, guest(), WS_A, projectId, {
+          name: 'Spam',
+          rule,
+          defaults: { title: 'Spam' },
+        } as never),
+      ),
+    )
+    const recurring = await run((tx) =>
+      svc.issues.createRecurring(tx, alice(), WS_A, projectId, {
+        name: 'Weekly review',
+        rule,
+        defaults: { title: 'Weekly review' },
+      } as never),
+    )
+    await forbidden(
+      run((tx) => svc.issues.updateRecurring(tx, guest(), WS_A, recurring.id, { enabled: false })),
+    )
+    await forbidden(run((tx) => svc.issues.deleteRecurring(tx, guest(), WS_A, recurring.id)))
+    // a guest who can see the project may still read the schedule
+    const listed = await run((tx) => svc.issues.listRecurring(tx, guest(), WS_A, projectId))
+    expect(listed.map((r) => r.name)).toContain('Weekly review')
+    await run((tx) => svc.issues.deleteRecurring(tx, alice(), WS_A, recurring.id))
+  })
+
+  it('lets anyone watch themselves but not subscribe or unsubscribe other people', async () => {
+    const self = await run((tx) => svc.issues.setWatcher(tx, guest(), WS_A, issueId, CAROL, true))
+    expect(self.watcherIds).toContain(CAROL)
+    await forbidden(run((tx) => svc.issues.setWatcher(tx, guest(), WS_A, issueId, ALICE, false)))
+    await forbidden(run((tx) => svc.issues.setWatcher(tx, guest(), WS_A, issueId, BOB, true)))
+    const byMember = await run((tx) => svc.issues.setWatcher(tx, bob(), WS_A, issueId, CAROL, false))
+    expect(byMember.watcherIds).not.toContain(CAROL)
+  })
+})

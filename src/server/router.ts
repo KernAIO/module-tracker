@@ -640,7 +640,7 @@ export function trackerRouter(kernel: Kernel) {
       templates: {
         list: scoped.issues.templates.list.handler(({ input, context }) =>
           run(context, input.workspaceId, (tx) =>
-            svc.issues.listTemplates(tx, input.workspaceId, input.projectId),
+            svc.issues.listTemplates(tx, context.principal, input.workspaceId, input.projectId),
           ),
         ),
         create: scoped.issues.templates.create.handler(({ input, context }) =>
@@ -650,49 +650,35 @@ export function trackerRouter(kernel: Kernel) {
         ),
         update: scoped.issues.templates.update.handler(({ input, context }) =>
           run(context, input.workspaceId, (tx) =>
-            svc.issues.updateTemplate(tx, input.workspaceId, input.id, input.patch),
+            svc.issues.updateTemplate(tx, context.principal, input.workspaceId, input.id, input.patch),
           ),
         ),
         delete: scoped.issues.templates.delete.handler(async ({ input, context }) => {
           await run(context, input.workspaceId, (tx) =>
-            svc.issues.deleteTemplate(tx, input.workspaceId, input.id),
+            svc.issues.deleteTemplate(tx, context.principal, input.workspaceId, input.id),
           )
           return ok
         }),
       },
       recurring: {
         list: scoped.issues.recurring.list.handler(({ input, context }) =>
-          run(context, input.workspaceId, async (tx) => {
-            await svc.access.requireProject(tx, context.principal, input.workspaceId, input.projectId)
-            return svc.issues.listRecurring(tx, input.workspaceId, input.projectId)
-          }),
+          run(context, input.workspaceId, (tx) =>
+            svc.issues.listRecurring(tx, context.principal, input.workspaceId, input.projectId),
+          ),
         ),
         create: scoped.issues.recurring.create.handler(({ input, context }) =>
-          run(context, input.workspaceId, async (tx) => {
-            await svc.access.requireProject(
-              tx,
-              context.principal,
-              input.workspaceId,
-              input.projectId,
-              'tracker.issue.create',
-            )
-            return svc.issues.createRecurring(
-              tx,
-              context.principal,
-              input.workspaceId,
-              input.projectId,
-              input,
-            )
-          }),
+          run(context, input.workspaceId, (tx) =>
+            svc.issues.createRecurring(tx, context.principal, input.workspaceId, input.projectId, input),
+          ),
         ),
         update: scoped.issues.recurring.update.handler(({ input, context }) =>
           run(context, input.workspaceId, (tx) =>
-            svc.issues.updateRecurring(tx, input.workspaceId, input.id, input.patch),
+            svc.issues.updateRecurring(tx, context.principal, input.workspaceId, input.id, input.patch),
           ),
         ),
         delete: scoped.issues.recurring.delete.handler(async ({ input, context }) => {
           await run(context, input.workspaceId, (tx) =>
-            svc.issues.deleteRecurring(tx, input.workspaceId, input.id),
+            svc.issues.deleteRecurring(tx, context.principal, input.workspaceId, input.id),
           )
           return ok
         }),
@@ -849,12 +835,12 @@ export function trackerRouter(kernel: Kernel) {
       ),
       update: scoped.labels.update.handler(({ input, context }) =>
         run(context, input.workspaceId, (tx) =>
-          svc.planning.updateLabel(tx, input.workspaceId, input.id, input.patch),
+          svc.planning.updateLabel(tx, context.principal, input.workspaceId, input.id, input.patch),
         ),
       ),
       delete: scoped.labels.delete.handler(async ({ input, context }) => {
         await run(context, input.workspaceId, (tx) =>
-          svc.planning.deleteLabel(tx, input.workspaceId, input.id),
+          svc.planning.deleteLabel(tx, context.principal, input.workspaceId, input.id),
         )
         return ok
       }),

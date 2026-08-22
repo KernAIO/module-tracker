@@ -1,7 +1,7 @@
 import type { ObjectRef, Principal } from '@kernhq/contracts'
 import { KernError, type Kernel, type Tx, uuidv7 } from '@kernhq/kernel'
 import { initialStatus, RESOLVED_CATEGORIES, type WorkflowDefinition } from '@kernhq/workflow'
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { z } from 'zod'
 import { trackerEvents } from '../../contract/events.js'
 import {
@@ -1082,7 +1082,10 @@ export class IssueService {
     watching: boolean,
   ): Promise<{ watcherIds: string[] }> {
     const current = await this.row(tx, workspaceId, issueId)
-    await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.issue.view')
+    // Watching yourself only needs to be able to see the issue. Adding or removing *someone else*
+    // changes what lands in their inbox, so it takes the permission that manages watchers.
+    const permission = userId === principal.userId ? 'tracker.issue.view' : 'tracker.issue.manage_watchers'
+    await this.access.requireProject(tx, principal, workspaceId, current.projectId, permission)
     const existing = current.watcherIds ?? []
     const watcherIds = watching ? uniq([...existing, userId]) : existing.filter((id: string) => id !== userId)
     await tx
@@ -1413,10 +1416,26 @@ export class IssueService {
 
   // ------------------------------------------------------------------ issue templates
 
-  async listTemplates(tx: Tx, workspaceId: string, projectId?: string): Promise<IssueTemplate[]> {
+  async listTemplates(
+    tx: Tx,
+    principal: Principal,
+    workspaceId: string,
+    projectId?: string,
+  ): Promise<IssueTemplate[]> {
     const filters = [eq(issueTemplates.workspaceId, workspaceId)]
-    if (projectId)
+    if (projectId) {
+      await this.access.requireProject(tx, principal, workspaceId, projectId, 'tracker.issue.view')
       filters.push(sql`(${issueTemplates.projectId} is null or ${issueTemplates.projectId} = ${projectId})`)
+    } else {
+      // Without a project the answer is "everything you could use": templates shared across the
+      // workspace, plus those belonging to projects this caller can actually see.
+      const visible = await this.access.visibleProjectIds(tx, principal, workspaceId)
+      filters.push(
+        visible.length
+          ? or(isNull(issueTemplates.projectId), inArray(issueTemplates.projectId, visible))!
+          : isNull(issueTemplates.projectId),
+      )
+    }
     const rows = await tx
       .select()
       .from(issueTemplates)
@@ -1425,12 +1444,49 @@ export class IssueService {
     return rows.map(toIssueTemplate)
   }
 
+  /**
+   * Issue templates and recurring rules are project configuration, not content: they decide what
+   * everyone else's issues look like. They take the same permission as managing the project, at
+   * project scope when they belong to one and at workspace scope when they are shared.
+   */
+  private async recurringRow(tx: Tx, workspaceId: string, id: string) {
+    const [row] = await tx
+      .select()
+      .from(recurringIssues)
+      .where(and(eq(recurringIssues.workspaceId, workspaceId), eq(recurringIssues.id, id)))
+      .limit(1)
+    if (!row) throw KernError.notFound('Recurring issue')
+    return row
+  }
+
+  private async templateRow(tx: Tx, workspaceId: string, id: string) {
+    const [row] = await tx
+      .select()
+      .from(issueTemplates)
+      .where(and(eq(issueTemplates.workspaceId, workspaceId), eq(issueTemplates.id, id)))
+      .limit(1)
+    if (!row) throw KernError.notFound('Issue template')
+    return row
+  }
+
+  private async requireTemplateManage(
+    tx: Tx,
+    principal: Principal,
+    workspaceId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    if (projectId)
+      await this.access.requireProject(tx, principal, workspaceId, projectId, 'tracker.project.manage')
+    else await this.access.requireWorkspace(principal, 'tracker.project.manage', workspaceId)
+  }
+
   async createTemplate(
     tx: Tx,
     principal: Principal,
     workspaceId: string,
     input: UpsertIssueTemplate,
   ): Promise<IssueTemplate> {
+    await this.requireTemplateManage(tx, principal, workspaceId, input.projectId ?? null)
     const [row] = await tx
       .insert(issueTemplates)
       .values({
@@ -1450,10 +1506,16 @@ export class IssueService {
 
   async updateTemplate(
     tx: Tx,
+    principal: Principal,
     workspaceId: string,
     id: string,
     patch: Partial<UpsertIssueTemplate>,
   ): Promise<IssueTemplate> {
+    const current = await this.templateRow(tx, workspaceId, id)
+    await this.requireTemplateManage(tx, principal, workspaceId, current.projectId)
+    // moving a template into or out of a project needs the permission on the destination too
+    if (patch.projectId !== undefined && patch.projectId !== current.projectId)
+      await this.requireTemplateManage(tx, principal, workspaceId, patch.projectId ?? null)
     const [row] = await tx
       .update(issueTemplates)
       .set({
@@ -1471,7 +1533,9 @@ export class IssueService {
     return toIssueTemplate(row)
   }
 
-  async deleteTemplate(tx: Tx, workspaceId: string, id: string): Promise<void> {
+  async deleteTemplate(tx: Tx, principal: Principal, workspaceId: string, id: string): Promise<void> {
+    const current = await this.templateRow(tx, workspaceId, id)
+    await this.requireTemplateManage(tx, principal, workspaceId, current.projectId)
     await tx
       .delete(issueTemplates)
       .where(and(eq(issueTemplates.workspaceId, workspaceId), eq(issueTemplates.id, id)))
@@ -1479,7 +1543,13 @@ export class IssueService {
 
   // ------------------------------------------------------------------ recurring issues
 
-  async listRecurring(tx: Tx, workspaceId: string, projectId: string): Promise<RecurringIssue[]> {
+  async listRecurring(
+    tx: Tx,
+    principal: Principal,
+    workspaceId: string,
+    projectId: string,
+  ): Promise<RecurringIssue[]> {
+    await this.access.requireProject(tx, principal, workspaceId, projectId, 'tracker.issue.view')
     const rows = await tx
       .select()
       .from(recurringIssues)
@@ -1495,6 +1565,7 @@ export class IssueService {
     projectId: string,
     input: UpsertRecurringIssue,
   ): Promise<RecurringIssue> {
+    await this.access.requireProject(tx, principal, workspaceId, projectId, 'tracker.project.manage')
     const [row] = await tx
       .insert(recurringIssues)
       .values({
@@ -1514,10 +1585,13 @@ export class IssueService {
 
   async updateRecurring(
     tx: Tx,
+    principal: Principal,
     workspaceId: string,
     id: string,
     patch: Partial<UpsertRecurringIssue>,
   ): Promise<RecurringIssue> {
+    const current = await this.recurringRow(tx, workspaceId, id)
+    await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.project.manage')
     const [row] = await tx
       .update(recurringIssues)
       .set({
@@ -1533,7 +1607,9 @@ export class IssueService {
     return toRecurringIssue(row)
   }
 
-  async deleteRecurring(tx: Tx, workspaceId: string, id: string): Promise<void> {
+  async deleteRecurring(tx: Tx, principal: Principal, workspaceId: string, id: string): Promise<void> {
+    const current = await this.recurringRow(tx, workspaceId, id)
+    await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.project.manage')
     await tx
       .delete(recurringIssues)
       .where(and(eq(recurringIssues.workspaceId, workspaceId), eq(recurringIssues.id, id)))

@@ -90,6 +90,15 @@ export const trackerPermissions = definePermissions([
     dangerous: false,
   },
   {
+    key: 'tracker.issue.manage_watchers',
+    label: 'Manage watchers',
+    description:
+      "Add or remove other people from an issue's watchers. Anyone who can see an issue can always watch or unwatch it themselves.",
+    scope: 'project',
+    defaultRoles: ['owner', 'admin', 'member'],
+    dangerous: false,
+  },
+  {
     key: 'tracker.issue.comment',
     label: 'Comment on issues',
     scope: 'project',

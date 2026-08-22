@@ -46,7 +46,11 @@ export class PlanningService {
 
   // ------------------------------------------------------------------ cycles
 
-  private async cycleStats(tx: Tx, cycleIds: string[]): Promise<Map<string, CycleStats>> {
+  private async cycleStats(
+    tx: Tx,
+    workspaceId: string,
+    cycleIds: string[],
+  ): Promise<Map<string, CycleStats>> {
     const out = new Map<string, CycleStats>()
     for (const id of cycleIds) out.set(id, { ...EMPTY_CYCLE_STATS })
     if (!cycleIds.length) return out
@@ -59,7 +63,13 @@ export class PlanningService {
         estimateDone: sql<number>`coalesce(sum(${issues.estimate}) filter (where ${issues.statusCategory} in ('done','cancelled')), 0)::float8`,
       })
       .from(issues)
-      .where(and(inArray(issues.cycleId, cycleIds), isNull(issues.archivedAt)))
+      .where(
+        and(
+          eq(issues.workspaceId, workspaceId),
+          inArray(issues.cycleId, cycleIds),
+          isNull(issues.archivedAt),
+        ),
+      )
       .groupBy(issues.cycleId)
     for (const row of rows)
       if (row.cycleId)
@@ -89,6 +99,7 @@ export class PlanningService {
       .orderBy(asc(cycles.number))
     const stats = await this.cycleStats(
       tx,
+      workspaceId,
       rows.map((r) => r.id),
     )
     return rows.map((r) => toCycle(r, stats.get(r.id)))
@@ -97,7 +108,7 @@ export class PlanningService {
   async getCycle(tx: Tx, principal: Principal, workspaceId: string, id: string): Promise<Cycle> {
     const row = await this.cycleRow(tx, workspaceId, id)
     await this.access.requireProject(tx, principal, workspaceId, row.projectId)
-    const stats = await this.cycleStats(tx, [id])
+    const stats = await this.cycleStats(tx, workspaceId, [id])
     return toCycle(row, stats.get(id))
   }
 
@@ -128,7 +139,7 @@ export class PlanningService {
     const [counter] = await tx
       .update(issueCounters)
       .set({ lastCycleNumber: sql`${issueCounters.lastCycleNumber} + 1` })
-      .where(eq(issueCounters.projectId, projectId))
+      .where(and(eq(issueCounters.workspaceId, workspaceId), eq(issueCounters.projectId, projectId)))
       .returning({ n: issueCounters.lastCycleNumber })
     const number = counter?.n ?? 1
     const [row] = await tx
@@ -169,7 +180,7 @@ export class PlanningService {
       })
       .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)))
       .returning()
-    const stats = await this.cycleStats(tx, [id])
+    const stats = await this.cycleStats(tx, workspaceId, [id])
     await this.notify.change(workspaceId, 'cycle', id, 'updated', { scope: { projectId: current.projectId } })
     return toCycle(row!, stats.get(id))
   }
@@ -177,7 +188,10 @@ export class PlanningService {
   async deleteCycle(tx: Tx, principal: Principal, workspaceId: string, id: string): Promise<void> {
     const current = await this.cycleRow(tx, workspaceId, id)
     await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.cycle.manage')
-    await tx.update(issues).set({ cycleId: null }).where(eq(issues.cycleId, id))
+    await tx
+      .update(issues)
+      .set({ cycleId: null })
+      .where(and(eq(issues.workspaceId, workspaceId), eq(issues.cycleId, id)))
     await tx.delete(cycles).where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, id)))
     await this.notify.change(workspaceId, 'cycle', id, 'deleted', { scope: { projectId: current.projectId } })
   }
@@ -200,7 +214,7 @@ export class PlanningService {
       .limit(1)
     if (running && running.id !== id)
       throw KernError.conflict('Another cycle is already active in this project', 'tracker.cycle.active')
-    const stats = (await this.cycleStats(tx, [id])).get(id) ?? EMPTY_CYCLE_STATS
+    const stats = (await this.cycleStats(tx, workspaceId, [id])).get(id) ?? EMPTY_CYCLE_STATS
     const [row] = await tx
       .update(cycles)
       .set({
@@ -269,18 +283,21 @@ export class PlanningService {
         .update(issues)
         .set({ cycleId: target, updatedAt: new Date() })
         .where(
-          inArray(
-            issues.id,
-            unfinished.map((r) => r.id),
+          and(
+            eq(issues.workspaceId, workspaceId),
+            inArray(
+              issues.id,
+              unfinished.map((r) => r.id),
+            ),
           ),
         )
     if (target && unfinished.length)
       await tx
         .update(cycles)
         .set({ carryOverCount: sql`${cycles.carryOverCount} + ${unfinished.length}` })
-        .where(eq(cycles.id, target))
+        .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, target)))
 
-    const stats = (await this.cycleStats(tx, [id])).get(id) ?? EMPTY_CYCLE_STATS
+    const stats = (await this.cycleStats(tx, workspaceId, [id])).get(id) ?? EMPTY_CYCLE_STATS
     const [row] = await tx
       .update(cycles)
       .set({ status: 'completed', completedAt: new Date(), updatedAt: new Date() })
@@ -305,6 +322,7 @@ export class PlanningService {
 
   private async countByColumn(
     tx: Tx,
+    workspaceId: string,
     column: typeof issues.milestoneId,
     ids: string[],
   ): Promise<Map<string, { total: number; done: number }>> {
@@ -318,7 +336,7 @@ export class PlanningService {
         done: sql<number>`count(*) filter (where ${issues.statusCategory} in ('done','cancelled'))::int`,
       })
       .from(issues)
-      .where(and(inArray(column, ids), isNull(issues.archivedAt)))
+      .where(and(eq(issues.workspaceId, workspaceId), inArray(column, ids), isNull(issues.archivedAt)))
       .groupBy(column)
     for (const row of rows)
       if (row.key) out.set(row.key, { total: Number(row.total), done: Number(row.done) })
@@ -339,6 +357,7 @@ export class PlanningService {
       .orderBy(asc(milestones.targetDate), asc(milestones.name))
     const stats = await this.countByColumn(
       tx,
+      workspaceId,
       issues.milestoneId,
       rows.map((r) => r.id),
     )
@@ -396,7 +415,7 @@ export class PlanningService {
       })
       .where(and(eq(milestones.workspaceId, workspaceId), eq(milestones.id, id)))
       .returning()
-    const stats = await this.countByColumn(tx, issues.milestoneId, [id])
+    const stats = await this.countByColumn(tx, workspaceId, issues.milestoneId, [id])
     await this.notify.change(workspaceId, 'milestone', id, 'updated', {
       scope: { projectId: current.projectId },
     })
@@ -411,7 +430,10 @@ export class PlanningService {
       .limit(1)
     if (!current) throw KernError.notFound('Milestone')
     await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.cycle.manage')
-    await tx.update(issues).set({ milestoneId: null }).where(eq(issues.milestoneId, id))
+    await tx
+      .update(issues)
+      .set({ milestoneId: null })
+      .where(and(eq(issues.workspaceId, workspaceId), eq(issues.milestoneId, id)))
     await tx.delete(milestones).where(and(eq(milestones.workspaceId, workspaceId), eq(milestones.id, id)))
     await this.notify.change(workspaceId, 'milestone', id, 'deleted', {
       scope: { projectId: current.projectId },
@@ -584,13 +606,19 @@ export class PlanningService {
       .orderBy(asc(components.name))
     const counts = await this.arrayCounts(
       tx,
+      workspaceId,
       'component_ids',
       rows.map((r) => r.id),
     )
     return rows.map((r) => toComponent(r, counts.get(r.id) ?? 0))
   }
 
-  private async arrayCounts(tx: Tx, column: string, ids: string[]): Promise<Map<string, number>> {
+  private async arrayCounts(
+    tx: Tx,
+    workspaceId: string,
+    column: string,
+    ids: string[],
+  ): Promise<Map<string, number>> {
     const out = new Map<string, number>()
     if (!ids.length) return out
     const rows = await tx.execute<{ id: string; n: number }>(sql`
@@ -651,7 +679,7 @@ export class PlanningService {
       })
       .where(and(eq(components.workspaceId, workspaceId), eq(components.id, id)))
       .returning()
-    const counts = await this.arrayCounts(tx, 'component_ids', [id])
+    const counts = await this.arrayCounts(tx, workspaceId, 'component_ids', [id])
     await this.notify.change(workspaceId, 'component', id, 'updated', {
       scope: { projectId: current.projectId },
     })
@@ -696,15 +724,31 @@ export class PlanningService {
       .orderBy(asc(labels.groupName), asc(labels.name))
     const counts = await this.arrayCounts(
       tx,
+      workspaceId,
       'label_ids',
       rows.map((r) => r.id),
     )
     return rows.map((r) => toLabel(r, counts.get(r.id) ?? 0))
   }
 
+  /**
+   * Labels are project configuration. A label attached to a project needs `tracker.project.manage`
+   * on that project; a workspace-wide label (`projectId === null`) has no project whose scheme could
+   * grant it, so it takes the same permission at workspace scope.
+   */
+  private async requireLabelManage(
+    tx: Tx,
+    principal: Principal,
+    workspaceId: string,
+    projectId: string | null,
+  ): Promise<void> {
+    if (projectId)
+      await this.access.requireProject(tx, principal, workspaceId, projectId, 'tracker.project.manage')
+    else await this.access.requireWorkspace(principal, 'tracker.project.manage', workspaceId)
+  }
+
   async createLabel(tx: Tx, principal: Principal, workspaceId: string, input: UpsertLabel): Promise<Label> {
-    if (input.projectId)
-      await this.access.requireProject(tx, principal, workspaceId, input.projectId, 'tracker.project.manage')
+    await this.requireLabelManage(tx, principal, workspaceId, input.projectId ?? null)
     const [row] = await tx
       .insert(labels)
       .values({
@@ -721,7 +765,18 @@ export class PlanningService {
     return toLabel(row!)
   }
 
-  async updateLabel(tx: Tx, workspaceId: string, id: string, patch: Partial<UpsertLabel>): Promise<Label> {
+  async updateLabel(
+    tx: Tx,
+    principal: Principal,
+    workspaceId: string,
+    id: string,
+    patch: Partial<UpsertLabel>,
+  ): Promise<Label> {
+    const current = await this.labelRow(tx, workspaceId, id)
+    await this.requireLabelManage(tx, principal, workspaceId, current.projectId)
+    // moving a label into (or out of) a project needs the permission on the destination too
+    if (patch.projectId !== undefined && (patch.projectId ?? null) !== current.projectId)
+      await this.requireLabelManage(tx, principal, workspaceId, patch.projectId ?? null)
     const [row] = await tx
       .update(labels)
       .set({
@@ -734,18 +789,30 @@ export class PlanningService {
       .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)))
       .returning()
     if (!row) throw KernError.notFound('Label')
-    const counts = await this.arrayCounts(tx, 'label_ids', [id])
+    const counts = await this.arrayCounts(tx, workspaceId, 'label_ids', [id])
     await this.notify.change(workspaceId, 'label', id, 'updated')
     return toLabel(row, counts.get(id) ?? 0)
   }
 
-  async deleteLabel(tx: Tx, workspaceId: string, id: string): Promise<void> {
+  async deleteLabel(tx: Tx, principal: Principal, workspaceId: string, id: string): Promise<void> {
+    const current = await this.labelRow(tx, workspaceId, id)
+    await this.requireLabelManage(tx, principal, workspaceId, current.projectId)
     await tx
       .update(issues)
       .set({ labelIds: sql`array_remove(${issues.labelIds}, ${id}::uuid)` })
-      .where(sql`${id}::uuid = any(${issues.labelIds})`)
+      .where(and(eq(issues.workspaceId, workspaceId), sql`${id}::uuid = any(${issues.labelIds})`))
     await tx.delete(labels).where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)))
     await this.notify.change(workspaceId, 'label', id, 'deleted')
+  }
+
+  private async labelRow(tx: Tx, workspaceId: string, id: string) {
+    const [row] = await tx
+      .select()
+      .from(labels)
+      .where(and(eq(labels.workspaceId, workspaceId), eq(labels.id, id)))
+      .limit(1)
+    if (!row) throw KernError.notFound('Label')
+    return row
   }
 
   /** Find or create a label by name, used by CSV import and email ingest. */

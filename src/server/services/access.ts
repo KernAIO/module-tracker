@@ -40,12 +40,23 @@ export class AccessService {
     return row
   }
 
-  async isProjectMember(tx: Tx, projectId: string, userId: string | null): Promise<boolean> {
+  async isProjectMember(
+    tx: Tx,
+    workspaceId: string,
+    projectId: string,
+    userId: string | null,
+  ): Promise<boolean> {
     if (!userId) return false
     const [row] = await tx
       .select({ role: projectMembers.role })
       .from(projectMembers)
-      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)))
+      .where(
+        and(
+          eq(projectMembers.workspaceId, workspaceId),
+          eq(projectMembers.projectId, projectId),
+          eq(projectMembers.userId, userId),
+        ),
+      )
       .limit(1)
     return !!row
   }
@@ -77,6 +88,19 @@ export class AccessService {
   }
 
   /**
+   * Permission check at workspace scope, for objects that are not owned by a project — a
+   * workspace-wide label or issue template has no project whose scheme could grant the permission.
+   */
+  async requireWorkspace(principal: Principal, permission: string, workspaceId: string): Promise<void> {
+    if (this.privileged(principal)) return
+    await this.kernel.authz.require(principal, permission, {
+      kind: 'workspace',
+      id: workspaceId,
+      workspaceId,
+    })
+  }
+
+  /**
    * Load a project and assert the caller may act on it. Private projects additionally require
    * membership — a workspace-wide permission is not enough to see somebody else's private project.
    */
@@ -100,7 +124,10 @@ export class AccessService {
   ): Promise<void> {
     if (this.privileged(principal)) return
     await this.require(principal, permission, project.workspaceId, project.id)
-    if (project.visibility === 'private' && !(await this.isProjectMember(tx, project.id, principal.userId)))
+    if (
+      project.visibility === 'private' &&
+      !(await this.isProjectMember(tx, project.workspaceId, project.id, principal.userId))
+    )
       throw KernError.forbidden('tracker.project.view')
   }
 
@@ -118,7 +145,7 @@ export class AccessService {
       filters.push(
         or(
           eq(projects.visibility, 'workspace'),
-          sql`exists (select 1 from ${projectMembers} where ${projectMembers.projectId} = ${projects.id} and ${projectMembers.userId} = ${principal.userId})`,
+          sql`exists (select 1 from ${projectMembers} where ${projectMembers.workspaceId} = ${workspaceId}::uuid and ${projectMembers.projectId} = ${projects.id} and ${projectMembers.userId} = ${principal.userId})`,
         )!,
       )
     } else if (!this.privileged(principal)) {
