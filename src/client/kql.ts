@@ -1,5 +1,5 @@
-import type { KqlError, KqlSuggestion } from '@kernhq/module-tracker/contract'
-import type { KqlExpr, KqlOp, KqlOrder, KqlQuery, KqlValue, Span } from '@kernhq/module-tracker/kql'
+import type { KqlError, KqlSuggestion } from '../contract/index.js'
+import type { KqlExpr, KqlOp, KqlOrder, KqlQuery, KqlValue, Span } from '../kql/index.js'
 import {
   customKqlField,
   findField,
@@ -8,7 +8,7 @@ import {
   operatorsFor,
   printQuery,
   SYSTEM_FIELDS,
-} from '@kernhq/module-tracker/kql'
+} from '../kql/index.js'
 
 /**
  * A KQL reader for the query box.
@@ -495,6 +495,6 @@ export type {
   KqlQuery,
   KqlValue,
   Span,
-} from '@kernhq/module-tracker/kql'
+} from '../kql/index.js'
 export type { KqlField }
 export { customKqlField, operatorsFor, SYSTEM_FIELDS }

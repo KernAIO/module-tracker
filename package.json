@@ -15,7 +15,9 @@
   "files": [
     "dist",
     "migrations",
-    "src/client"
+    "src/client",
+    "src/contract",
+    "src/kql"
   ],
   "exports": {
     "./contract": {
