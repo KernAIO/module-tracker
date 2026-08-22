@@ -1118,6 +1118,93 @@ describe('intake, triage and email', () => {
     expect(issue.descriptionText).toContain('reporter@example.test')
   })
 
+  it('asks about the custom fields the default type shows, and no others', async () => {
+    // The software template puts Severity on Bug and Story points on Story; the default type is
+    // Story, so the form asks what a Story holds.
+    const form = await svc.intake.form(token)
+    const keys = form.fields.map((f) => f.key)
+    expect(keys.slice(0, 4)).toEqual(['name', 'email', 'title', 'description'])
+    expect(keys).toContain('cf.story_points')
+    // hidden on Story by the template, so the public form does not ask for it either
+    expect(keys).not.toContain('cf.severity')
+
+    const points = form.fields.find((f) => f.key === 'cf.story_points')
+    expect(points?.type).toBe('number')
+  })
+
+  it('never asks a stranger to pick a person or another issue', async () => {
+    // A `user` field would list the workspace's members to the public and a `relation` its issues.
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'intake_owner',
+        name: 'Owner',
+        type: 'user',
+      } as never),
+    )
+    const form = await svc.intake.form(token)
+    expect(form.fields.map((f) => f.key)).not.toContain('cf.intake_owner')
+  })
+
+  it('stores an answer as a value, not as a line of prose', async () => {
+    const submitted = await svc.intake.submit({
+      token,
+      title: 'Sized by the reporter',
+      email: 'reporter@example.test',
+      fields: { 'cf.story_points': 5 },
+    })
+    const issue = await run((tx) => svc.issues.getByKey(tx, alice(), WS_A, submitted.issueKey))
+    // filterable, groupable and reportable — none of which a sentence is
+    expect(issue.custom.story_points).toBe(5)
+    expect(issue.descriptionText).not.toContain('story_points')
+  })
+
+  it('ignores an answer the form never asked for', async () => {
+    // The form is public: a submission can name anything at all.
+    const submitted = await svc.intake.submit({
+      token,
+      title: 'Sneaky',
+      email: 'reporter@example.test',
+      fields: { 'cf.severity': 'sev1', not_a_field: 'x' },
+    })
+    const issue = await run((tx) => svc.issues.getByKey(tx, alice(), WS_A, submitted.issueKey))
+    expect(issue.custom.severity).toBeUndefined()
+    expect(issue.custom.not_a_field).toBeUndefined()
+  })
+
+  it('still accepts a submission that leaves a required field empty', async () => {
+    // A stranger does not know the workspace made a field mandatory. Refusing here would lose the
+    // request entirely, so the gap is recorded and somebody completes the issue during triage.
+    //
+    // The field is archived again straight afterwards: `required` binds every later `app`-sourced
+    // create in this project too, which is right, and would otherwise break the tests that follow.
+    const field = await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'intake_required',
+        name: 'Required thing',
+        type: 'text',
+        required: true,
+      } as never),
+    )
+    try {
+      const submitted = await svc.intake.submit({
+        token,
+        title: 'Missing the required answer',
+        email: 'reporter@example.test',
+      })
+      const issue = await run((tx) => svc.issues.getByKey(tx, alice(), WS_A, submitted.issueKey))
+      expect(issue.custom.intake_required).toBeUndefined()
+
+      // and the same gap on the app path is refused, because somebody there can see the form
+      await expect(
+        run((tx) => svc.issues.create(tx, alice(), WS_A, { projectId, title: 'From the app' } as never)),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+    } finally {
+      await run((tx) => svc.config.archiveField(tx, WS_A, field.id, true))
+    }
+  })
+
   it('rejects a submission that fills the honeypot', async () => {
     await expect(svc.intake.submit({ token, title: 'spam', website: '' as never })).resolves.toBeTruthy()
     await expect(

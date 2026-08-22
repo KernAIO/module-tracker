@@ -1306,9 +1306,21 @@ export const IntakeForm = z.object({
   description: z.string().nullable(),
   fields: z.array(
     z.object({
+      /** `name`, `email`, `title`, `description`, or `cf.<key>` for a custom field */
       key: z.string(),
       label: z.string(),
-      type: z.enum(['text', 'textarea', 'email', 'select']),
+      description: z.string().nullable().optional(),
+      type: z.enum([
+        'text',
+        'textarea',
+        'email',
+        'select',
+        'multiselect',
+        'number',
+        'date',
+        'checkbox',
+        'url',
+      ]),
       required: z.boolean(),
       options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
     }),

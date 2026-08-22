@@ -15,6 +15,7 @@ import type { CommentService } from './comments.js'
 import type { ConfigService } from './config.js'
 import { parseSettings } from './db.js'
 import type { IssueService } from './issues.js'
+import type { LayoutService } from './layout.js'
 import type { NotifyService } from './notify.js'
 import type { TransitionService } from './transitions.js'
 
@@ -26,6 +27,7 @@ export class IntakeService {
     private readonly kernel: Kernel,
     private readonly access: AccessService,
     private readonly config: ConfigService,
+    private readonly layout: LayoutService,
     private readonly issuesService: IssueService,
     private readonly comments: CommentService,
     private readonly transitions: TransitionService,
@@ -72,24 +74,97 @@ export class IntakeService {
           { key: 'email', label: 'Email', type: 'email' as const, required: true },
           { key: 'title', label: 'Summary', type: 'text' as const, required: true },
           { key: 'description', label: 'Details', type: 'textarea' as const, required: false },
+          ...(await this.publicFields(tx, workspaceId, project.id)),
         ],
         allowAttachments: false,
       }
     })
   }
 
+  /**
+   * The custom fields a public form asks about.
+   *
+   * They come from the resolved layout of the project's default work item type, so the form asks
+   * for what an issue of that type actually holds — configure a field and the form follows, with
+   * nothing to keep in step by hand.
+   *
+   * Only field types a stranger can sensibly answer are offered. A `user` picker would list the
+   * workspace's members to the public, and a `relation` would list its issues; neither belongs on a
+   * form anyone on the internet can open. A field the layout hides is not asked about either.
+   */
+  private async publicFields(tx: Tx, workspaceId: string, projectId: string): Promise<IntakeForm['fields']> {
+    const types = await this.config.listTypes(tx, workspaceId, { projectId })
+    const type = types.find((t) => t.isDefault) ?? types[0]
+    if (!type) return []
+    const layout = await this.layout.resolve(tx, workspaceId, projectId, type.id)
+
+    const ASKABLE: Record<string, IntakeForm['fields'][number]['type']> = {
+      text: 'text',
+      textarea: 'textarea',
+      select: 'select',
+      multiselect: 'multiselect',
+      number: 'number',
+      date: 'date',
+      checkbox: 'checkbox',
+      url: 'url',
+    }
+
+    return [...layout.main, ...layout.sidebar]
+      .filter((f) => f.kind === 'custom' && f.field && ASKABLE[f.field.type])
+      .map((f) => {
+        const field = f.field!
+        const type = ASKABLE[field.type]!
+        return {
+          key: `cf.${field.key}`,
+          label: field.name,
+          description: field.description,
+          type,
+          required: f.required,
+          ...(field.options.length
+            ? {
+                options: field.options
+                  .filter((o) => !o.archived)
+                  .map((o) => ({ value: o.id, label: o.label })),
+              }
+            : {}),
+        }
+      })
+  }
+
   async submit(input: IntakeSubmission): Promise<{ ok: true; issueKey: string }> {
     // the honeypot is a field real people never see, so anything in it is a bot
     if (input.website) throw KernError.badRequest('Rejected')
     const { workspaceId, projectId } = await this.resolveToken(input.token)
+    // Who reported it stays in the description: there is nowhere else for a stranger's name and
+    // address to go, and the person triaging needs to see it first.
     const body = [
       input.description ?? '',
       '',
-      ...Object.entries(input.fields ?? {}).map(([key, value]) => `${key}: ${String(value)}`),
       input.email ? `Reported by: ${input.name ? `${input.name} <${input.email}>` : input.email}` : '',
     ]
       .filter(Boolean)
       .join('\n')
+
+    /**
+     * The answers become the issue's custom values rather than lines of prose. Flattening them
+     * meant a form could ask for Impact and the issue would not be filtered, grouped or reported on
+     * by it — the answer was only ever text in a paragraph.
+     *
+     * Only keys the form actually offered are accepted: the form is public, so a submission can
+     * name anything at all.
+     */
+    const offered = new Set(
+      (await this.form(input.token)).fields.filter((f) => f.key.startsWith('cf.')).map((f) => f.key.slice(3)),
+    )
+    const custom: Record<string, unknown> = {}
+    const ignored: string[] = []
+    for (const [key, value] of Object.entries(input.fields ?? {})) {
+      const name = key.startsWith('cf.') ? key.slice(3) : key
+      if (offered.has(name)) custom[name] = value
+      else ignored.push(name)
+    }
+    if (ignored.length)
+      this.kernel.log.info({ projectId, fields: ignored }, 'tracker: intake ignored unknown answers')
 
     const issue = await this.kernel.database.withWorkspace(workspaceId, (tx) =>
       this.issuesService.create(
@@ -100,6 +175,7 @@ export class IntakeService {
           projectId,
           title: input.title,
           description: textToDoc(body),
+          ...(Object.keys(custom).length ? { custom } : {}),
         },
         { source: 'intake', system: true, triage: true },
       ),

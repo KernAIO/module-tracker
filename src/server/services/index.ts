@@ -54,7 +54,7 @@ export function trackerServices(kernel: Kernel): TrackerServices {
   const views = new ViewService(kernel, access, notify)
   const time = new TimeService(kernel, access, issues, notify)
   const reports = new ReportService(kernel, access, config, planning, time)
-  const intake = new IntakeService(kernel, access, config, issues, comments, transitions, notify)
+  const intake = new IntakeService(kernel, access, config, layout, issues, comments, transitions, notify)
   const imports = new ImportService(kernel, access, config, issues, planning)
 
   const services: TrackerServices = {
