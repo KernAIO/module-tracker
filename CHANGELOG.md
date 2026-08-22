@@ -1,5 +1,12 @@
 # @kernhq/module-tracker
 
+## 0.7.1
+
+### Patch Changes
+
+- f6d65ee: Export `Timer`, `Worklog` and `TimesheetRow` from `@kernhq/module-tracker/client`, so an interface
+  can name what the time-tracking procedures return.
+
 ## 0.7.0
 
 ### Minor Changes
