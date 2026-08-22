@@ -1,4 +1,4 @@
-import type { core } from '@kernaio/contracts'
+import type { core } from '@kernhq/contracts'
 
 /** Notification types emitted by the tracker (drives the user preference UI). */
 export const trackerNotificationTypes: core.NotificationTypeDef[] = [

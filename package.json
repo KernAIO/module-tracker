@@ -1,5 +1,5 @@
 {
-  "name": "@kernaio/module-tracker",
+  "name": "@kernhq/module-tracker",
   "version": "0.1.0",
   "description": "Kern tracker module: projects, work item types, custom fields, workflows, issues, KQL, cycles, views, reports, intake, time tracking (server + client skeleton)",
   "license": "AGPL-3.0-only",
@@ -53,9 +53,9 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@kernaio/contracts": "^0.1.0",
-    "@kernaio/kernel": "^0.1.0",
-    "@kernaio/workflow": "^0.1.0",
+    "@kernhq/contracts": "^0.1.0",
+    "@kernhq/kernel": "^0.1.0",
+    "@kernhq/workflow": "^0.1.0",
     "@orpc/contract": "^1.15.0",
     "@orpc/server": "^1.15.0",
     "drizzle-orm": "^0.45.0",

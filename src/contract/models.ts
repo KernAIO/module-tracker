@@ -1,5 +1,5 @@
-import { Color, Id, Timestamp, UserId, WorkspaceId } from '@kernaio/contracts'
-import { ApprovalState, StatusCategory, WorkflowDefinition } from '@kernaio/workflow'
+import { Color, Id, Timestamp, UserId, WorkspaceId } from '@kernhq/contracts'
+import { ApprovalState, StatusCategory, WorkflowDefinition } from '@kernhq/workflow'
 import { z } from 'zod'
 
 export const MODULE_ID = 'tracker'
@@ -1166,7 +1166,7 @@ export type KqlFieldInfo = z.infer<typeof KqlFieldInfo>
 
 export const KqlParseResult = z.object({
   ok: z.boolean(),
-  /** normalized AST (JSON) – see `@kernaio/module-tracker/kql` for the typed shape */
+  /** normalized AST (JSON) – see `@kernhq/module-tracker/kql` for the typed shape */
   ast: z.unknown().nullable(),
   errors: z.array(KqlError),
   /** normalised, pretty-printed query */
