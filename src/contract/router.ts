@@ -1,4 +1,4 @@
-import { baseContract, Id, PageInput, page, Timestamp, UserId, WorkspaceId } from '@kernalo/contracts'
+import { baseContract, Id, PageInput, page, Timestamp, UserId, WorkspaceId } from '@kernaio/contracts'
 import { oc } from '@orpc/contract'
 import { z } from 'zod'
 import {

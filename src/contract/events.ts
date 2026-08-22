@@ -1,4 +1,4 @@
-import { defineEvent, Id, UserId, WorkspaceId } from '@kernalo/contracts'
+import { defineEvent, Id, UserId, WorkspaceId } from '@kernaio/contracts'
 import { z } from 'zod'
 import { IssueKey, Priority, StatusCategory } from './models.js'
 

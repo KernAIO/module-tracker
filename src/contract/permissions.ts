@@ -1,4 +1,4 @@
-import { definePermissions } from '@kernalo/contracts'
+import { definePermissions } from '@kernaio/contracts'
 
 /**
  * Tracker permission keys. Bindings may be set at workspace scope (roles) or at project scope
