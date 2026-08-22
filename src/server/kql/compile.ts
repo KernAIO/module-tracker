@@ -145,7 +145,15 @@ const CUSTOM_KIND: Record<FieldType, ExprKind> = {
   formula: 'number',
 }
 
-const CUSTOM_ARRAY: ReadonlySet<FieldType> = new Set(['multiselect', 'multiuser', 'label'])
+/** Custom field types whose value is a JSON array, so KQL compares them with containment. */
+const CUSTOM_ARRAY: ReadonlySet<FieldType> = new Set([
+  'multiselect',
+  'multiuser',
+  'label',
+  // a relation always stores string[], even when relationMultiple is false; without this it
+  // compiled as scalar text and silently matched nothing
+  'relation',
+])
 
 function customExpr(key: string, type: FieldType): SQL {
   switch (type) {

@@ -143,7 +143,11 @@ export function customKqlField(key: string, fieldType: FieldType, label: string)
     name: `cf.${key}`,
     kind,
     label,
-    array: fieldType === 'multiselect' || fieldType === 'multiuser' || fieldType === 'label',
+    array:
+      fieldType === 'multiselect' ||
+      fieldType === 'multiuser' ||
+      fieldType === 'label' ||
+      fieldType === 'relation',
     sortable: kind === 'number' || kind === 'date' || kind === 'datetime' || kind === 'text',
     custom: { key, fieldType },
   }

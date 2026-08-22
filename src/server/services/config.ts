@@ -400,8 +400,10 @@ export class ConfigService {
       .where(
         and(
           eq(fieldDefs.workspaceId, workspaceId),
+          // Deliberately not scoped by project: the key is the `issues.custom` key, so it must be
+          // unique across the workspace. This mirrors the unique index — checking a narrower scope
+          // here would let a collision through to a raw constraint violation.
           eq(fieldDefs.key, input.key),
-          input.projectId ? eq(fieldDefs.projectId, input.projectId) : isNull(fieldDefs.projectId),
         ),
       )
       .limit(1)
@@ -571,7 +573,10 @@ export class ConfigService {
   }
 
   async createWorkflow(tx: Tx, workspaceId: string, input: UpsertWorkflow): Promise<Workflow> {
-    const validated = validateDefinition(input.definition)
+    // The registry has to be passed here, not only in `validate()`. Without it an unknown rule type
+    // saves happily and only surfaces later as a blocked transition or a dropped intent — which
+    // meant `workflows.validate` rejected definitions that `workflows.create` accepted.
+    const validated = validateDefinition(input.definition, registryForValidation())
     if (!validated.ok)
       throw KernError.badRequest('Invalid workflow definition', { problems: validated.problems })
     if (input.isDefault) await this.clearDefaultWorkflow(tx, workspaceId, input.projectId ?? null)
@@ -600,7 +605,7 @@ export class ConfigService {
     const current = await this.getWorkflowRow(tx, workspaceId, id)
     let definition = current.definition as WorkflowDefinition
     if (patch.definition) {
-      const validated = validateDefinition(patch.definition)
+      const validated = validateDefinition(patch.definition, registryForValidation())
       if (!validated.ok)
         throw KernError.badRequest('Invalid workflow definition', { problems: validated.problems })
       definition = validated.definition
@@ -631,16 +636,27 @@ export class ConfigService {
     next: WorkflowDefinition,
   ) {
     const known = new Set(next.statuses.map((s) => s.id))
-    const rows = await tx
-      .select({ statusId: issues.statusId, n: sql<number>`count(*)::int` })
-      .from(issues)
-      .where(and(eq(issues.workspaceId, workspaceId), sql`true`))
-      .groupBy(issues.statusId)
     const typeRows = await tx
       .select({ id: workItemTypes.id })
       .from(workItemTypes)
       .where(and(eq(workItemTypes.workspaceId, workspaceId), eq(workItemTypes.workflowId, workflowId)))
     if (!typeRows.length) return
+
+    // Count only the issues this workflow governs. Counting the whole workspace meant a status
+    // belonging to some *other* workflow blocked this one from being edited.
+    const rows = await tx
+      .select({ statusId: issues.statusId, n: sql<number>`count(*)::int` })
+      .from(issues)
+      .where(
+        and(
+          eq(issues.workspaceId, workspaceId),
+          inArray(
+            issues.typeId,
+            typeRows.map((t) => t.id),
+          ),
+        ),
+      )
+      .groupBy(issues.statusId)
     const missing = rows.filter((r) => !known.has(r.statusId) && r.n > 0).map((r) => r.statusId)
     if (missing.length)
       throw KernError.conflict(
@@ -895,9 +911,15 @@ export class ConfigService {
     const workflowIds: string[] = []
     for (const definition of definitions) {
       const id = uuidv7()
+      // Validate before reserving the index. Skipping an invalid definition after the push left
+      // `workflowIndex` pointing at a workflow row that was never inserted, so every type in the
+      // template mapped to nothing. A template that cannot be applied is an error, not a warning.
+      const validated = validateDefinition({ ...definition, id }, registryForValidation())
+      if (!validated.ok)
+        throw KernError.badRequest(`Template workflow "${definition.name}" is not valid`, {
+          problems: validated.problems,
+        })
       workflowIds.push(id)
-      const validated = validateDefinition({ ...definition, id })
-      if (!validated.ok) continue
       await tx.insert(workflows).values({
         id,
         workspaceId,

@@ -1800,3 +1800,202 @@ describe('configuration authorisation', () => {
     expect(byMember.watcherIds).not.toContain(CAROL)
   })
 })
+
+// =====================================================================================
+
+describe('workflow and field definition guards', () => {
+  let projectId: string
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'GRD', name: 'Guards', template: 'software' } as never),
+    )
+    projectId = project.id
+  })
+
+  const withUnknownRule = (id: string) => ({
+    id,
+    name: 'Unknown rule',
+    statuses: [
+      { id: 'open', name: 'Open', category: 'todo' as const, order: 0, initial: true },
+      { id: 'done', name: 'Done', category: 'done' as const, order: 1 },
+    ],
+    transitions: [
+      {
+        id: 'finish',
+        name: 'Finish',
+        from: ['open'],
+        to: 'done',
+        conditions: [{ type: 'tracker.no_such_condition', config: {} }],
+      },
+    ],
+  })
+
+  it('refuses to save a workflow whose rule type does not exist', async () => {
+    // `validate` and `create` must agree. They did not: `create` skipped the rule registry, so an
+    // unknown condition saved happily and only surfaced as a transition nobody could take.
+    const reported = svc.config.validate(withUnknownRule('unknown-a'))
+    expect(reported.ok).toBe(false)
+
+    await expect(
+      run((tx) =>
+        svc.config.createWorkflow(tx, WS_A, {
+          projectId,
+          name: 'Unknown rule',
+          definition: withUnknownRule('unknown-a'),
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('refuses to update a workflow into a rule type that does not exist', async () => {
+    const created = await run((tx) =>
+      svc.config.createWorkflow(tx, WS_A, {
+        projectId,
+        name: 'Sound',
+        definition: {
+          id: 'sound',
+          name: 'Sound',
+          statuses: [
+            { id: 'open', name: 'Open', category: 'todo', order: 0, initial: true },
+            { id: 'done', name: 'Done', category: 'done', order: 1 },
+          ],
+          transitions: [{ id: 'finish', name: 'Finish', from: ['open'], to: 'done' }],
+        } as never,
+      }),
+    )
+    await expect(
+      run((tx) =>
+        svc.config.updateWorkflow(tx, WS_A, created.id, {
+          definition: withUnknownRule('sound'),
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
+  })
+
+  it('only counts issues of the types this workflow governs when a status is removed', async () => {
+    // Two workflows in one workspace. Removing a status from one used to be blocked by an issue
+    // sitting in a same-named status of the *other* one, because the count was workspace-wide.
+    const other = await run((tx) =>
+      svc.config.createWorkflow(tx, WS_A, {
+        projectId,
+        name: 'Other flow',
+        definition: {
+          id: 'other',
+          name: 'Other flow',
+          statuses: [
+            { id: 'open', name: 'Open', category: 'todo', order: 0, initial: true },
+            { id: 'parked', name: 'Parked', category: 'todo', order: 1 },
+          ],
+          transitions: [{ id: 'park', name: 'Park', from: ['open'], to: 'parked' }],
+        } as never,
+      }),
+    )
+    const otherType = await run((tx) =>
+      svc.config.createType(
+        tx,
+        WS_A,
+        { projectId, key: 'parked_thing', name: 'Parked thing', level: 0, workflowId: other.id } as never,
+        ALICE,
+      ),
+    )
+    const parked = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, {
+        projectId,
+        title: 'Sitting in parked',
+        typeId: otherType.id,
+      } as never),
+    )
+    await run((tx) => svc.transitions.apply(tx, alice(), WS_A, parked.id, { transitionId: 'park' }))
+
+    // A third workflow that nothing uses. Dropping a status from it must not consult `parked`.
+    const spare = await run((tx) =>
+      svc.config.createWorkflow(tx, WS_A, {
+        projectId,
+        name: 'Spare flow',
+        definition: {
+          id: 'spare',
+          name: 'Spare flow',
+          statuses: [
+            { id: 'open', name: 'Open', category: 'todo', order: 0, initial: true },
+            { id: 'parked', name: 'Parked', category: 'todo', order: 1 },
+          ],
+          transitions: [{ id: 'park', name: 'Park', from: ['open'], to: 'parked' }],
+        } as never,
+      }),
+    )
+    const spareType = await run((tx) =>
+      svc.config.createType(
+        tx,
+        WS_A,
+        { projectId, key: 'spare_thing', name: 'Spare thing', level: 0, workflowId: spare.id } as never,
+        ALICE,
+      ),
+    )
+    expect(spareType.workflowId).toBe(spare.id)
+
+    const narrowed = await run((tx) =>
+      svc.config.updateWorkflow(tx, WS_A, spare.id, {
+        definition: {
+          id: 'spare',
+          name: 'Spare flow',
+          statuses: [{ id: 'open', name: 'Open', category: 'todo', order: 0, initial: true }],
+          transitions: [],
+        },
+      } as never),
+    )
+    expect(narrowed.definition.statuses.map((s) => s.id)).toEqual(['open'])
+  })
+
+  it('matches a relation field, which is stored as an array even when single-valued', async () => {
+    // A relation always stores string[]. KQL compiled it as scalar text, so `cf.blocked_by = <id>`
+    // compared an array against a string and matched nothing, silently.
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, {
+        projectId,
+        key: 'related_to',
+        name: 'Related to',
+        type: 'relation',
+      } as never),
+    )
+    const target = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, { projectId, title: 'The target' } as never),
+    )
+    const source = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, {
+        projectId,
+        title: 'Points at the target',
+        custom: { related_to: [target.id] },
+      } as never),
+    )
+    const found = await run((tx) =>
+      svc.query.query(tx, alice(), {
+        workspaceId: WS_A as IssueQueryInput['workspaceId'],
+        kql: `cf.related_to = "${target.id}"`,
+        projectIds: [projectId],
+        limit: 10,
+        includeArchived: false,
+        include: { total: false, groupCounts: false, full: false },
+      } as IssueQueryInput),
+    )
+    expect(found.items.map((i) => i.id)).toEqual([source.id])
+  })
+
+  it('keeps a custom field key unique across the whole workspace', async () => {
+    // The key is the `issues.custom` key, so a project-scoped duplicate of a workspace-level field
+    // would write to the same place. The database constraint and this check must agree.
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, { key: 'guard_scope', name: 'Guard scope', type: 'text' } as never),
+    )
+    await expect(
+      run((tx) =>
+        svc.config.createField(tx, WS_A, {
+          projectId,
+          key: 'guard_scope',
+          name: 'Guard scope again',
+          type: 'text',
+        } as never),
+      ),
+    ).rejects.toMatchObject({ code: 'CONFLICT' })
+  })
+})

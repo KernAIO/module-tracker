@@ -204,10 +204,9 @@ export const fieldDefs = schema.table(
     updatedAt: ts('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('field_defs_ws_project_key_uq')
-      .on(t.workspaceId, t.projectId, t.key)
-      .where(sql`project_id is not null`),
-    uniqueIndex('field_defs_ws_key_uq').on(t.workspaceId, t.key).where(sql`project_id is null`),
+    // One key per workspace, whatever the project scope: the key *is* the `issues.custom` key,
+    // so two definitions sharing one would share a value. See migration 0002.
+    uniqueIndex('field_defs_ws_key_uq').on(t.workspaceId, t.key),
     index('field_defs_ws_idx').on(t.workspaceId, t.projectId, t.order),
   ],
 )
