@@ -44,6 +44,7 @@ import {
   worklogs,
   workspaces,
 } from '../schema.js'
+import { PROJECT_TEMPLATE_CHOICES, PROJECT_TEMPLATES } from '../seeds/templates.js'
 import type { AccessService } from './access.js'
 import type { ConfigService } from './config.js'
 import {
@@ -185,12 +186,7 @@ export class ProjectService {
         .where(and(eq(projectTemplates.workspaceId, workspaceId), eq(projectTemplates.id, input.templateId)))
         .limit(1)
       if (!template) throw KernError.notFound('Project template')
-      applied = await this.config.applyProjectTemplateBody(
-        tx,
-        workspaceId,
-        id,
-        (template.body as Record<string, unknown>) ?? {},
-      )
+      applied = await this.config.applyProjectTemplateBody(tx, workspaceId, id, template.body)
     }
     if (!applied) await this.config.seedProject(tx, workspaceId, id, input.template)
 
@@ -515,13 +511,32 @@ export class ProjectService {
 
   // ------------------------------------------------------------------ project templates
 
+  /**
+   * The templates a new project can be created from: the four the tracker ships with, then the
+   * ones this workspace saved.
+   *
+   * The built-ins used to be rows with a null workspace, which this query could never return
+   * because it filters by workspace — so the shipped templates were invisible to the only screen
+   * meant to offer them. They are values in `seeds/templates.ts` now, and appear here directly.
+   */
   async listTemplates(tx: Tx, workspaceId: string): Promise<ProjectTemplate[]> {
-    const rows = await tx
+    const saved = await tx
       .select()
       .from(projectTemplates)
       .where(eq(projectTemplates.workspaceId, workspaceId))
       .orderBy(asc(projectTemplates.name))
-    return rows.map(toProjectTemplate)
+    const builtin: ProjectTemplate[] = PROJECT_TEMPLATE_CHOICES.map((choice) => ({
+      id: choice.id as ProjectTemplate['id'],
+      workspaceId: null,
+      key: choice.id,
+      name: choice.name,
+      description: choice.description,
+      icon: null,
+      body: PROJECT_TEMPLATES[choice.id],
+      builtin: true,
+      createdAt: new Date(0).toISOString() as ProjectTemplate['createdAt'],
+    }))
+    return [...builtin, ...saved.map(toProjectTemplate)]
   }
 
   async saveTemplateFromProject(

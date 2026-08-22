@@ -752,6 +752,21 @@ export class PlanningService {
 
   async createLabel(tx: Tx, principal: Principal, workspaceId: string, input: UpsertLabel): Promise<Label> {
     await this.requireLabelManage(tx, principal, workspaceId, input.projectId ?? null)
+    // A duplicate used to surface as a raw constraint violation — a 500 for something the person
+    // did on purpose and can fix in a second.
+    const [clash] = await tx
+      .select({ id: labels.id })
+      .from(labels)
+      .where(
+        and(
+          eq(labels.workspaceId, workspaceId),
+          eq(labels.name, input.name),
+          input.projectId ? eq(labels.projectId, input.projectId) : isNull(labels.projectId),
+        ),
+      )
+      .limit(1)
+    if (clash)
+      throw KernError.conflict(`The label "${input.name}" already exists`, 'tracker.label.name_taken')
     const [row] = await tx
       .insert(labels)
       .values({

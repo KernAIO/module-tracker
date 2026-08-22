@@ -15,6 +15,7 @@ import type { z } from 'zod'
 import {
   type FieldDef,
   HierarchyRules,
+  ProjectTemplateBody,
   type StatusInfo,
   type TypeScheme,
   type UpsertFieldDef,
@@ -29,12 +30,15 @@ import {
   fieldDefs,
   hierarchyRules,
   issues,
+  labels,
   projects,
   typeSchemes,
+  views,
   workflowSchemes,
   workflows,
   workItemTypes,
 } from '../schema.js'
+import { projectTemplateBody } from '../seeds/templates.js'
 import type { AccessService } from './access.js'
 import {
   type FieldDefRow,
@@ -58,37 +62,6 @@ let validationRegistry: RuleRegistry | null = null
 const registryForValidation = (): RuleRegistry => {
   validationRegistry ??= builtinRegistry()
   return validationRegistry
-}
-
-/** Types seeded into a fresh project, per project template. */
-const TYPE_SEEDS: Record<string, Array<{ key: string; name: string; level: number; icon: string }>> = {
-  software: [
-    { key: 'epic', name: 'Epic', level: 1, icon: 'zap' },
-    { key: 'story', name: 'Story', level: 0, icon: 'bookmark' },
-    { key: 'task', name: 'Task', level: 0, icon: 'square-check-big' },
-    { key: 'bug', name: 'Bug', level: 0, icon: 'bug' },
-    { key: 'sub_task', name: 'Sub-task', level: -1, icon: 'git-branch' },
-  ],
-  kanban: [
-    { key: 'task', name: 'Task', level: 0, icon: 'square-check-big' },
-    { key: 'bug', name: 'Bug', level: 0, icon: 'bug' },
-  ],
-  simple: [{ key: 'task', name: 'Task', level: 0, icon: 'square-check-big' }],
-  blank: [{ key: 'task', name: 'Task', level: 0, icon: 'square-check-big' }],
-}
-
-const DEFAULT_TYPE_KEY: Record<string, string> = {
-  software: 'story',
-  kanban: 'task',
-  simple: 'task',
-  blank: 'task',
-}
-
-const WORKFLOW_FOR_TEMPLATE: Record<string, WorkflowTemplateId> = {
-  software: 'software',
-  kanban: 'kanban',
-  simple: 'simple',
-  blank: 'simple',
 }
 
 /** Work item types, custom fields, workflows and the schemes that bind them to projects. */
@@ -784,77 +757,66 @@ export class ConfigService {
 
   // ------------------------------------------------------------------ seeding
 
-  /** Create the workflow and types a brand-new project starts with. */
+  /**
+   * Create the workflow, fields and types a brand-new project starts with.
+   *
+   * A built-in template is a `ProjectTemplateBody` in `seeds/templates.ts`, so this is the applier
+   * with a body chosen by name. There used to be a second seeding path here — a table of type
+   * names and a workflow id — which meant "create from Software" and "create from a saved
+   * template" produced projects that were configured differently for no reason anyone chose.
+   */
   async seedProject(
     tx: Tx,
     workspaceId: string,
     projectId: string,
     template: string,
-  ): Promise<{ workflowId: string; typeIds: string[]; defaultTypeId: string }> {
-    const templateId = WORKFLOW_FOR_TEMPLATE[template] ?? 'simple'
-    const workflowId = uuidv7()
-    const definition = createWorkflowFromTemplate(templateId, { id: workflowId })
-    await tx.insert(workflows).values({
-      id: workflowId,
+  ): Promise<{ workflowId: string; defaultTypeId: string }> {
+    const applied = await this.applyProjectTemplateBody(
+      tx,
       workspaceId,
       projectId,
-      name: definition.name,
-      description: definition.description ?? null,
-      definition,
-      isDefault: true,
-    })
-    const seeds = TYPE_SEEDS[template] ?? TYPE_SEEDS.simple!
-    const defaultKey = DEFAULT_TYPE_KEY[template] ?? 'task'
-    const typeIds: string[] = []
-    let defaultTypeId = ''
-    for (const [order, seed] of seeds.entries()) {
-      const id = uuidv7()
-      typeIds.push(id)
-      if (seed.key === defaultKey) defaultTypeId = id
-      await tx.insert(workItemTypes).values({
-        id,
-        workspaceId,
-        projectId,
-        key: seed.key,
-        name: seed.name,
-        icon: seed.icon,
-        level: seed.level,
-        isDefault: seed.key === defaultKey,
-        workflowId,
-        order,
-      })
-    }
-    return { workflowId, typeIds, defaultTypeId: defaultTypeId || typeIds[0]! }
+      projectTemplateBody(template),
+    )
+    // Every built-in body has a workflow and at least one type, so this cannot be null; the check
+    // is here so a mistake in a template is an error rather than a project with nothing in it.
+    if (!applied) throw KernError.badRequest(`The "${template}" template seeds nothing`)
+    return applied
   }
 
-  /** Restore a project blueprint saved with `projects.templates.saveFromProject`. */
+  /**
+   * Apply a template body to a fresh project: workflows, fields, types and their layouts.
+   *
+   * This is the only applier. A built-in template is a value of the same shape as a snapshot taken
+   * from an existing project, so "create from Software" and "create from the template we saved
+   * last week" walk exactly the same code — there is no second path to drift.
+   *
+   * Ids inside a body are template-local: workflows are named by index, and a type's layout names
+   * fields by `cf.<key>`. That is what lets a body written in one workspace apply in another.
+   */
   async applyProjectTemplateBody(
     tx: Tx,
     workspaceId: string,
     projectId: string,
-    body: Record<string, unknown>,
+    input: unknown,
   ): Promise<{ workflowId: string; defaultTypeId: string } | null> {
-    const definitions = (body.workflows as WorkflowDefinition[] | undefined) ?? []
-    const types =
-      (body.types as Array<{
-        key: string
-        name: string
-        level: number
-        icon?: string | null
-        color?: string | null
-        isDefault?: boolean
-        workflowIndex?: number
-      }>) ?? []
-    if (!definitions.length || !types.length) return null
+    const parsed = ProjectTemplateBody.safeParse(input ?? {})
+    if (!parsed.success)
+      throw KernError.badRequest('This template cannot be applied', {
+        problems: parsed.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      })
+    const body = parsed.data
+    // A body with nothing in it would produce a project with no types, which is not a project.
+    if (!body.workflows.length || !body.types.length) return null
+
     const workflowIds: string[] = []
-    for (const definition of definitions) {
+    for (const entry of body.workflows) {
       const id = uuidv7()
       // Validate before reserving the index. Skipping an invalid definition after the push left
       // `workflowIndex` pointing at a workflow row that was never inserted, so every type in the
       // template mapped to nothing. A template that cannot be applied is an error, not a warning.
-      const validated = validateDefinition({ ...definition, id }, registryForValidation())
+      const validated = validateDefinition({ ...entry.definition, id }, registryForValidation())
       if (!validated.ok)
-        throw KernError.badRequest(`Template workflow "${definition.name}" is not valid`, {
+        throw KernError.badRequest(`Template workflow "${entry.name}" is not valid`, {
           problems: validated.problems,
         })
       workflowIds.push(id)
@@ -862,13 +824,43 @@ export class ConfigService {
         id,
         workspaceId,
         projectId,
-        name: definition.name,
+        name: entry.name,
         definition: validated.definition,
         isDefault: workflowIds.length === 1,
       })
     }
+
+    // Fields come before types, because a type's layout refers to them.
+    //
+    // They are created at workspace level, not scoped to this project. A field key is unique per
+    // workspace, so scoping them here would mean only the *first* project created from a template
+    // owned its fields — and every project after it would carry layouts referring to fields it
+    // could not see, which the resolver drops silently.
+    for (const [order, field] of body.fields.entries())
+      await tx
+        .insert(fieldDefs)
+        .values({
+          id: uuidv7(),
+          workspaceId,
+          projectId: null,
+          key: field.key,
+          name: field.name,
+          description: field.description ?? null,
+          type: field.type,
+          options: field.options ?? [],
+          defaultValue: field.defaultValue ?? null,
+          config: field.config ?? {},
+          searchable: field.searchable ?? false,
+          required: field.required ?? false,
+          showInCards: field.showInCards ?? false,
+          order,
+        })
+        // A workspace-level field of the same key already covers this; the project keeps that one
+        // rather than the template failing outright.
+        .onConflictDoNothing()
+
     let defaultTypeId = ''
-    for (const [order, type] of types.entries()) {
+    for (const [order, type] of body.types.entries()) {
       const id = uuidv7()
       if (type.isDefault || !defaultTypeId) defaultTypeId = id
       await tx.insert(workItemTypes).values({
@@ -877,52 +869,144 @@ export class ConfigService {
         projectId,
         key: type.key,
         name: type.name,
+        description: type.description ?? null,
         icon: type.icon ?? null,
         color: type.color ?? null,
         level: type.level,
         isDefault: !!type.isDefault,
         workflowId: workflowIds[type.workflowIndex ?? 0] ?? workflowIds[0]!,
+        fieldLayout: type.fieldLayout ?? [],
+        templateBody: type.templateBody ?? null,
         order,
       })
     }
+
+    for (const label of body.labels)
+      await tx
+        .insert(labels)
+        .values({
+          id: uuidv7(),
+          workspaceId,
+          projectId,
+          name: label.name,
+          color: label.color ?? null,
+        })
+        .onConflictDoNothing()
+
+    for (const [order, view] of body.views.entries())
+      await tx.insert(views).values({
+        id: uuidv7(),
+        workspaceId,
+        projectId,
+        name: view.name,
+        description: view.description ?? null,
+        icon: view.icon ?? null,
+        kql: view.kql,
+        layout: view.layout,
+        display: view.display ?? {},
+        filters: view.filters ?? {},
+        visibility: view.visibility,
+        order,
+      })
+
     return { workflowId: workflowIds[0]!, defaultTypeId }
   }
 
-  /** Snapshot a project's configuration so another project can be created from it. */
-  async snapshotProject(tx: Tx, workspaceId: string, projectId: string): Promise<Record<string, unknown>> {
+  /**
+   * A project's configuration as a template body, ready to create another project from.
+   *
+   * It emits everything the applier reads, and the round trip is a test: create from a built-in,
+   * snapshot it, create again from the snapshot, and the resolved layouts match. Until now this
+   * emitted fields the applier ignored and dropped layouts, labels and views entirely — so a
+   * template saved from a carefully configured project produced a project configured differently.
+   */
+  async snapshotProject(tx: Tx, workspaceId: string, projectId: string): Promise<ProjectTemplateBody> {
+    const [project] = await tx
+      .select({ settings: projects.settings })
+      .from(projects)
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, projectId)))
+      .limit(1)
+    const workflowRows = await tx
+      .select()
+      .from(workflows)
+      .where(and(eq(workflows.workspaceId, workspaceId), eq(workflows.projectId, projectId)))
+      .orderBy(asc(workflows.createdAt))
+    const workflowIndex = new Map(workflowRows.map((w, i) => [w.id, i]))
     const typeRows = await tx
       .select()
       .from(workItemTypes)
       .where(and(eq(workItemTypes.workspaceId, workspaceId), eq(workItemTypes.projectId, projectId)))
       .orderBy(asc(workItemTypes.order))
-    const workflowRows = await tx
+    // Every field this project's types lay out, wherever it is scoped. Filtering to project-scoped
+    // fields would emit nothing at all, because a template's fields live at workspace level.
+    const namedByLayouts = new Set(
+      typeRows.flatMap((t) =>
+        ((t.fieldLayout ?? []) as Array<{ fieldId?: string }>)
+          .map((item) => item.fieldId ?? '')
+          .filter((id) => id.startsWith('cf.'))
+          .map((id) => id.slice(3)),
+      ),
+    )
+    const fieldRows = (
+      await tx
+        .select()
+        .from(fieldDefs)
+        .where(and(eq(fieldDefs.workspaceId, workspaceId), isNull(fieldDefs.archivedAt)))
+        .orderBy(asc(fieldDefs.order))
+    ).filter((f) => f.projectId === projectId || namedByLayouts.has(f.key))
+    const labelRows = await tx
       .select()
-      .from(workflows)
-      .where(and(eq(workflows.workspaceId, workspaceId), eq(workflows.projectId, projectId)))
-    const workflowIndex = new Map(workflowRows.map((w, i) => [w.id, i]))
-    const fieldRows = await tx
+      .from(labels)
+      .where(and(eq(labels.workspaceId, workspaceId), eq(labels.projectId, projectId)))
+    const viewRows = await tx
       .select()
-      .from(fieldDefs)
-      .where(and(eq(fieldDefs.workspaceId, workspaceId), eq(fieldDefs.projectId, projectId)))
-    return {
-      workflows: workflowRows.map((w) => w.definition),
+      .from(views)
+      .where(and(eq(views.workspaceId, workspaceId), eq(views.projectId, projectId)))
+      .orderBy(asc(views.order))
+
+    return ProjectTemplateBody.parse({
+      version: 1,
+      settings: project?.settings ?? {},
+      workflows: workflowRows.map((w) => ({ name: w.name, definition: w.definition })),
+      fields: fieldRows.map((f) => ({
+        key: f.key,
+        name: f.name,
+        description: f.description,
+        type: f.type,
+        options: f.options ?? [],
+        defaultValue: f.defaultValue,
+        config: f.config ?? {},
+        searchable: f.searchable,
+        required: f.required,
+        showInCards: f.showInCards,
+      })),
       types: typeRows.map((t) => ({
         key: t.key,
         name: t.name,
+        description: t.description,
         level: t.level,
         icon: t.icon,
         color: t.color,
         isDefault: t.isDefault,
+        fieldLayout: t.fieldLayout ?? [],
+        templateBody: t.templateBody,
         workflowIndex: t.workflowId ? (workflowIndex.get(t.workflowId) ?? 0) : 0,
       })),
-      fields: fieldRows.map((f) => ({
-        key: f.key,
-        name: f.name,
-        type: f.type,
-        options: f.options,
-        config: f.config,
-      })),
-    }
+      labels: labelRows.map((l) => ({ name: l.name, color: l.color })),
+      // A built-in view is recreated by the project itself, so snapshotting it would duplicate it.
+      views: viewRows
+        .filter((v) => !v.builtin)
+        .map((v) => ({
+          name: v.name,
+          description: v.description,
+          icon: v.icon,
+          kql: v.kql,
+          layout: v.layout,
+          display: v.display ?? {},
+          filters: v.filters ?? {},
+          visibility: v.visibility,
+        })),
+    })
   }
 
   /** Ensure a set of type ids all belong to this workspace (scheme validation). */

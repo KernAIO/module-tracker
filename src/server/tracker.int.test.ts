@@ -328,16 +328,19 @@ describe('issues', () => {
   })
 
   it('merges custom values and removes a key when the value is null', async () => {
-    await run((tx) => svc.config.createField(tx, WS_A, { key: 'severity', name: 'Severity', type: 'text' }))
+    // Not `severity`: the software template creates one, and a field key is unique per workspace.
+    await run((tx) =>
+      svc.config.createField(tx, WS_A, { key: 'merge_note', name: 'Merge note', type: 'text' }),
+    )
     await run((tx) => svc.config.createField(tx, WS_A, { key: 'extra', name: 'Extra', type: 'number' }))
     const withValue = await run((tx) =>
-      svc.issues.update(tx, alice(), WS_A, first.id, { custom: { severity: 'sev1', extra: 1 } }),
+      svc.issues.update(tx, alice(), WS_A, first.id, { custom: { merge_note: 'sev1', extra: 1 } }),
     )
-    expect(withValue.custom).toMatchObject({ severity: 'sev1', extra: 1 })
+    expect(withValue.custom).toMatchObject({ merge_note: 'sev1', extra: 1 })
     const cleared = await run((tx) =>
-      svc.issues.update(tx, alice(), WS_A, first.id, { custom: { severity: null } }),
+      svc.issues.update(tx, alice(), WS_A, first.id, { custom: { merge_note: null } }),
     )
-    expect(cleared.custom.severity).toBeUndefined()
+    expect(cleared.custom.merge_note).toBeUndefined()
     expect(cleared.custom.extra).toBe(1)
   })
 
@@ -613,15 +616,17 @@ describe('KQL queries', () => {
       svc.projects.create(tx, alice(), WS_A, { key: 'KQL', name: 'Query', template: 'software' } as never),
     )
     projectId = project.id
+    // Not `regression`: the software template seeds one, and a label name is unique per project.
     const label = await run((tx) =>
-      svc.planning.createLabel(tx, alice(), WS_A, { projectId, name: 'regression' }),
+      svc.planning.createLabel(tx, alice(), WS_A, { projectId, name: 'kql-fixture' }),
     )
     bugLabelId = label.id
     await run((tx) =>
+      // The software template already provides `story_points`; this block needs a key of its own.
       svc.config.createField(tx, WS_A, {
         projectId,
-        key: 'story_points',
-        name: 'Story points',
+        key: 'kql_points',
+        name: 'KQL points',
         type: 'number',
       }),
     )
@@ -631,7 +636,7 @@ describe('KQL queries', () => {
       { title: 'Slow search', priority: 'medium', assigneeIds: [BOB as never], estimate: 3 },
       { title: 'Typo in footer', priority: 'low', labelIds: [bugLabelId], estimate: 1 },
       { title: 'Flaky regression test', priority: 'high', labelIds: [bugLabelId], dueDate: '2026-01-15' },
-      { title: 'Backlog grooming', priority: 'none', custom: { story_points: 8 } },
+      { title: 'Backlog grooming', priority: 'none', custom: { kql_points: 8 } },
     ]
     for (const values of seed)
       await run((tx) => svc.issues.create(tx, alice(), WS_A, { projectId, ...values } as CreateIssue))
@@ -672,7 +677,7 @@ describe('KQL queries', () => {
   })
 
   it('resolves label names to ids', async () => {
-    const result = await query({ kql: 'label = regression', projectIds: [projectId] })
+    const result = await query({ kql: 'label = "kql-fixture"', projectIds: [projectId] })
     expect(result.items).toHaveLength(2)
     expect((await query({ kql: 'label = nosuchlabel', projectIds: [projectId] })).items).toHaveLength(0)
   })
@@ -691,8 +696,8 @@ describe('KQL queries', () => {
 
   it('compares numbers and custom fields', async () => {
     expect((await query({ kql: 'estimate >= 3', projectIds: [projectId] })).items).toHaveLength(2)
-    expect((await query({ kql: 'cf.story_points = 8', projectIds: [projectId] })).items).toHaveLength(1)
-    expect((await query({ kql: 'cf.story_points > 10', projectIds: [projectId] })).items).toHaveLength(0)
+    expect((await query({ kql: 'cf.kql_points = 8', projectIds: [projectId] })).items).toHaveLength(1)
+    expect((await query({ kql: 'cf.kql_points > 10', projectIds: [projectId] })).items).toHaveLength(0)
   })
 
   it('combines terms with and / or / not and parentheses', async () => {
@@ -793,7 +798,7 @@ describe('KQL queries', () => {
     const fields = await run((tx) => svc.query.fieldInfo(tx, alice(), WS_A, [projectId]))
     const names = fields.map((f) => f.name)
     expect(names).toContain('priority')
-    expect(names).toContain('cf.story_points')
+    expect(names).toContain('cf.kql_points')
     expect(fields.find((f) => f.name === 'priority')!.values?.map((v) => v.value)).toContain('urgent')
     expect(fields.find((f) => f.name === 'status')!.values?.length).toBeGreaterThan(0)
   })
@@ -2060,7 +2065,9 @@ describe('resolved field layout', () => {
     )
     projectId = project.id
     const types = await run((tx) => svc.config.listTypes(tx, WS_A, { projectId }))
-    typeId = types.find((t) => t.key === 'bug')!.id
+    // `task` on purpose: the software template gives Bug and Story layouts of their own, and this
+    // block is about a type that has none.
+    typeId = types.find((t) => t.key === 'task')!.id
   })
 
   const resolve = () => run((tx) => svc.layout.resolve(tx, WS_A, projectId, typeId))
@@ -2391,5 +2398,122 @@ describe('approvals addressed to a group or a role', () => {
     expect(parked.approval).toBeTruthy()
     const decided = await run((tx) => svc.transitions.decide(tx, alice(), WS_A, issue.id, 'ship', 'approve'))
     expect(decided.issue?.statusId).toBe('shipped')
+  })
+})
+
+// =====================================================================================
+
+describe('project templates', () => {
+  // Its own workspace: a custom field key is unique per workspace, so a template's `severity`
+  // yields to one an earlier test already created. That is the right behaviour and the wrong
+  // fixture — here the templates are what is under test.
+  const ws = randomUUID()
+  const admin = () => principal(ALICE, ws)
+  const inTemplateWs = <T>(fn: (tx: Tx) => Promise<T>) => inWs(ws, admin())(fn)
+  it('seeds each of the four shapes with its own types and fields', async () => {
+    const cases = [
+      {
+        template: 'software',
+        key: 'SWT',
+        types: ['epic', 'story', 'task', 'bug', 'sub_task'],
+        field: 'severity',
+      },
+      { template: 'support', key: 'SUP', types: ['ticket', 'problem', 'task'], field: 'impact' },
+      { template: 'marketing', key: 'MKT', types: ['campaign', 'asset', 'request'], field: 'audience' },
+      { template: 'simple', key: 'SMP', types: ['task'], field: null },
+    ] as const
+
+    for (const c of cases) {
+      const project = await inTemplateWs((tx) =>
+        svc.projects.create(tx, admin(), ws, { key: c.key, name: c.key, template: c.template } as never),
+      )
+      const types = await inTemplateWs((tx) => svc.config.listTypes(tx, ws, { projectId: project.id }))
+      expect(types.map((t) => t.key).sort()).toEqual([...c.types].sort())
+      expect(types.filter((t) => t.isDefault)).toHaveLength(1)
+
+      const fields = await inTemplateWs((tx) => svc.config.listFields(tx, ws, { projectId: project.id }))
+      if (c.field) expect(fields.map((f) => f.key)).toContain(c.field)
+      else expect(fields.filter((f) => f.projectId === project.id)).toHaveLength(0)
+    }
+  })
+
+  it("puts a template's layout on the type it belongs to", async () => {
+    // Severity is required on a Bug and hidden on a Story: the same field, two arrangements. This
+    // is the whole reason layouts are per type rather than per project.
+    const project = await inTemplateWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'LAY2', name: 'Layouts', template: 'software' } as never),
+    )
+    const types = await inTemplateWs((tx) => svc.config.listTypes(tx, ws, { projectId: project.id }))
+    const bug = types.find((t) => t.key === 'bug')!
+    const story = types.find((t) => t.key === 'story')!
+
+    const bugLayout = await inTemplateWs((tx) => svc.layout.resolve(tx, ws, project.id, bug.id))
+    const severityOnBug = bugLayout.sidebar.find((f) => f.fieldId === 'cf.severity')
+    expect(severityOnBug?.required).toBe(true)
+    expect(bugLayout.main.map((f) => f.fieldId)).toContain('cf.steps_to_reproduce')
+
+    const storyLayout = await inTemplateWs((tx) => svc.layout.resolve(tx, ws, project.id, story.id))
+    expect(storyLayout.hidden.map((f) => f.fieldId)).toContain('cf.severity')
+    expect(storyLayout.sidebar.map((f) => f.fieldId)).toContain('cf.story_points')
+  })
+
+  it('round-trips: a project created from a snapshot is configured like its source', async () => {
+    const source = await inTemplateWs((tx) =>
+      svc.projects.create(tx, admin(), ws, {
+        key: 'RTA',
+        name: 'Round trip A',
+        template: 'software',
+      } as never),
+    )
+    const body = await inTemplateWs((tx) => svc.config.snapshotProject(tx, ws, source.id))
+    // the snapshot carries everything the applier reads, not just workflows and types
+    expect(body.fields.map((f) => f.key)).toContain('severity')
+    expect(body.types.find((t) => t.key === 'bug')?.fieldLayout?.length).toBeGreaterThan(0)
+    expect(body.labels.map((l) => l.name)).toContain('regression')
+
+    // The real path: save the project as a template, then create from it. `applyProjectTemplateBody`
+    // expects a fresh project — creating one and then applying a body on top collides with the
+    // types the creation already seeded.
+    const saved = await inTemplateWs((tx) =>
+      svc.projects.saveTemplateFromProject(tx, admin(), ws, source.id, 'Our software setup'),
+    )
+    const copy = await inTemplateWs((tx) =>
+      svc.projects.create(tx, admin(), ws, {
+        key: 'RTB',
+        name: 'Round trip B',
+        templateId: saved.id,
+      } as never),
+    )
+
+    const resolvedFor = async (projectId: string, typeKey: string) => {
+      const types = await inTemplateWs((tx) => svc.config.listTypes(tx, ws, { projectId }))
+      const type = types.find((t) => t.key === typeKey)!
+      const layout = await inTemplateWs((tx) => svc.layout.resolve(tx, ws, projectId, type.id))
+      return {
+        main: layout.main.map((f) => f.fieldId),
+        sidebar: layout.sidebar.map((f) => f.fieldId),
+        hidden: layout.hidden.map((f) => f.fieldId),
+      }
+    }
+    expect(await resolvedFor(copy.id, 'bug')).toEqual(await resolvedFor(source.id, 'bug'))
+    expect(await resolvedFor(copy.id, 'story')).toEqual(await resolvedFor(source.id, 'story'))
+  })
+
+  it('offers the built-in templates, which used to be unlistable', async () => {
+    // They were stored as rows with a null workspace and the query filters by workspace, so the
+    // shipped templates could never appear in the list meant to offer them.
+    const listed = await inTemplateWs((tx) => svc.projects.listTemplates(tx, ws))
+    const builtin = listed.filter((t) => t.builtin).map((t) => t.key)
+    expect(builtin).toEqual(['software', 'support', 'marketing', 'simple'])
+  })
+
+  it('refuses a template body that would seed nothing', async () => {
+    const project = await inTemplateWs((tx) =>
+      svc.projects.create(tx, admin(), ws, { key: 'EMT', name: 'Empty', template: 'simple' } as never),
+    )
+    const applied = await inTemplateWs((tx) =>
+      svc.config.applyProjectTemplateBody(tx, ws, project.id, { version: 1 }),
+    )
+    expect(applied).toBeNull()
   })
 })
