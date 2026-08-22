@@ -24,6 +24,7 @@ export type {
   FieldType,
   GroupBy,
   Issue,
+  IssueApproval,
   IssueHistoryEntry,
   IssueKey,
   IssueQueryInput,
