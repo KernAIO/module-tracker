@@ -41,6 +41,7 @@ export type {
   Project,
   ProjectKey,
   ProjectMember,
+  ProjectTemplate,
   ProjectTemplateBody,
   ProjectTemplateId,
   ReactionSummary,
