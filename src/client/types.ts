@@ -55,6 +55,8 @@ export type {
   StatusHistoryEntry,
   StatusInfo,
   SystemFieldId,
+  Timer,
+  TimesheetRow,
   UpdateIssue,
   Version,
   View,
@@ -62,4 +64,5 @@ export type {
   ViewLayout,
   Workflow,
   WorkItemType,
+  Worklog,
 } from '../contract/index.js'
