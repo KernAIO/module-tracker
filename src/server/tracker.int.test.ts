@@ -2218,3 +2218,67 @@ describe('transition screens', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' })
   })
 })
+
+// =====================================================================================
+
+describe('comment attachments', () => {
+  let projectId: string
+  let issueId: string
+  const forbidden = (pr: Promise<unknown>) => expect(pr).rejects.toMatchObject({ code: 'FORBIDDEN' })
+  const doc = (text: string) => ({
+    type: 'doc',
+    content: [{ type: 'paragraph', content: [{ type: 'text', text }] }],
+  })
+
+  beforeAll(async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'ATT', name: 'Attach', template: 'software' } as never),
+    )
+    projectId = project.id
+    const issue = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, { projectId, title: 'Has files' } as never),
+    )
+    issueId = issue.id
+  })
+
+  it('records which comment a file arrived with, and still lists it on the issue', async () => {
+    const comment = await run((tx) =>
+      svc.comments.create(tx, alice(), WS_A, issueId, doc('Screenshot attached') as never),
+    )
+    const fileId = randomUUID()
+    const [attached] = await run((tx) =>
+      svc.issues.addAttachments(tx, alice(), WS_A, issueId, [fileId], comment.id),
+    )
+    expect(attached!.commentId).toBe(comment.id)
+
+    // an attachment belongs to the issue and *optionally* to a comment
+    const all = await run((tx) => svc.issues.listAttachments(tx, alice(), WS_A, issueId))
+    expect(all.map((a) => a.fileId)).toContain(fileId)
+  })
+
+  it('lets somebody who may comment but not edit attach a file to their own comment', async () => {
+    // A guest can reply; a guest cannot edit the issue. Attaching a screenshot to a reply is part
+    // of replying, so it must not require the edit permission.
+    const comment = await inWs(
+      WS_A,
+      guest(),
+    )((tx) => svc.comments.create(tx, guest(), WS_A, issueId, doc('From a guest') as never))
+    const fileId = randomUUID()
+    const [attached] = await inWs(
+      WS_A,
+      guest(),
+    )((tx) => svc.issues.addAttachments(tx, guest(), WS_A, issueId, [fileId], comment.id))
+    expect(attached!.commentId).toBe(comment.id)
+
+    // and the same guest may take it back off, because the comment is theirs
+    await inWs(WS_A, guest())((tx) => svc.issues.removeAttachment(tx, guest(), WS_A, attached!.id))
+    const left = await run((tx) => svc.issues.listAttachments(tx, alice(), WS_A, issueId))
+    expect(left.map((a) => a.fileId)).not.toContain(fileId)
+  })
+
+  it('still refuses a guest attaching to the issue itself', async () => {
+    await forbidden(
+      inWs(WS_A, guest())((tx) => svc.issues.addAttachments(tx, guest(), WS_A, issueId, [randomUUID()])),
+    )
+  })
+})

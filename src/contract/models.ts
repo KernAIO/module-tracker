@@ -821,6 +821,8 @@ export const Attachment = z.object({
   id: Id,
   workspaceId: WorkspaceId,
   issueId: Id,
+  /** the comment that introduced this file, if any — the issue lists it either way */
+  commentId: Id.nullable(),
   /** core file id */
   fileId: Id,
   name: z.string(),

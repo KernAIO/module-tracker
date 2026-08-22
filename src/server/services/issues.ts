@@ -1297,6 +1297,7 @@ export class IssueService {
     issueId: string,
     fileIds: string[],
     uploadedBy: string | null,
+    commentId: string | null = null,
   ): Promise<Attachment[]> {
     const rows: Array<typeof attachments.$inferInsert> = []
     for (const fileId of uniq(fileIds)) {
@@ -1312,6 +1313,7 @@ export class IssueService {
         mimeType: file?.mimeType ?? 'application/octet-stream',
         size: file?.size ?? 0,
         uploadedBy,
+        commentId,
       })
     }
     if (!rows.length) return []
@@ -1330,14 +1332,27 @@ export class IssueService {
     workspaceId: string,
     issueId: string,
     fileIds: string[],
+    commentId: string | null = null,
   ): Promise<Attachment[]> {
     const current = await this.row(tx, workspaceId, issueId)
-    await this.access.requireEditIssue(principal, workspaceId, current.projectId, {
-      reporterId: current.reporterId,
-      creatorId: current.creatorId,
-      assigneeIds: current.assigneeIds ?? [],
-    })
-    const created = await this.attachFiles(tx, workspaceId, issueId, fileIds, principal.userId ?? null)
+    // A file that arrives with a comment is part of commenting, not part of editing the issue:
+    // somebody who may reply but not edit must still be able to attach a screenshot to their reply.
+    if (commentId)
+      await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.issue.comment')
+    else
+      await this.access.requireEditIssue(principal, workspaceId, current.projectId, {
+        reporterId: current.reporterId,
+        creatorId: current.creatorId,
+        assigneeIds: current.assigneeIds ?? [],
+      })
+    const created = await this.attachFiles(
+      tx,
+      workspaceId,
+      issueId,
+      fileIds,
+      principal.userId ?? null,
+      commentId,
+    )
     await this.notify.change(workspaceId, 'issue', issueId, 'updated')
     return created
   }
@@ -1355,11 +1370,22 @@ export class IssueService {
       .limit(1)
     if (!row) throw KernError.notFound('Attachment')
     const issue = await this.row(tx, workspaceId, row.issueId)
-    await this.access.requireEditIssue(principal, workspaceId, issue.projectId, {
-      reporterId: issue.reporterId,
-      creatorId: issue.creatorId,
-      assigneeIds: issue.assigneeIds ?? [],
-    })
+    // The author of a comment owns the files that arrived with it, the same way they own its text.
+    const ownComment = row.commentId
+      ? (
+          await tx
+            .select({ authorId: comments.authorId })
+            .from(comments)
+            .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, row.commentId)))
+            .limit(1)
+        )[0]?.authorId === principal.userId
+      : false
+    if (!ownComment)
+      await this.access.requireEditIssue(principal, workspaceId, issue.projectId, {
+        reporterId: issue.reporterId,
+        creatorId: issue.creatorId,
+        assigneeIds: issue.assigneeIds ?? [],
+      })
     await tx.delete(attachments).where(eq(attachments.id, attachmentId))
     await this.refreshAttachmentCount(tx, workspaceId, row.issueId)
     await this.notify.change(workspaceId, 'issue', row.issueId, 'updated')

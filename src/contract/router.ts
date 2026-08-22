@@ -480,10 +480,10 @@ export const trackerContract = {
         .route({ method: 'GET', path: '/issues/{issueId}/attachments', ...t('attachments') })
         .input(iss)
         .output(z.array(Attachment)),
-      /** attach an already-uploaded core file */
+      /** attach an already-uploaded core file, optionally as part of a comment */
       add: baseContract
         .route({ method: 'POST', path: '/issues/{issueId}/attachments', ...t('attachments') })
-        .input(iss.extend({ fileIds: z.array(Id).min(1).max(50) }))
+        .input(iss.extend({ fileIds: z.array(Id).min(1).max(50), commentId: Id.nullable().optional() }))
         .output(z.array(Attachment)),
       remove: baseContract
         .route({ method: 'DELETE', path: '/attachments/{attachmentId}', ...t('attachments') })

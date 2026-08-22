@@ -377,6 +377,7 @@ export function toAttachment(r: AttachmentRow): Attachment {
     id: r.id,
     workspaceId: asId(r.workspaceId),
     issueId: r.issueId,
+    commentId: r.commentId,
     fileId: r.fileId,
     name: r.name,
     mimeType: r.mimeType,

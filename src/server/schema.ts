@@ -384,6 +384,8 @@ export const attachments = schema.table(
     id: id(),
     workspaceId: ws(),
     issueId: uuid('issue_id').notNull(),
+    /** set when the file arrived with a comment; the issue still lists it either way */
+    commentId: uuid('comment_id'),
     fileId: uuid('file_id').notNull(),
     name: text('name').notNull(),
     mimeType: text('mime_type').notNull().default('application/octet-stream'),
@@ -394,6 +396,7 @@ export const attachments = schema.table(
   (t) => [
     uniqueIndex('attachments_issue_file_uq').on(t.issueId, t.fileId),
     index('attachments_issue_idx').on(t.issueId, t.createdAt),
+    index('attachments_comment_idx').on(t.commentId),
   ],
 )
 

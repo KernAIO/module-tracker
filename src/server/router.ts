@@ -585,7 +585,14 @@ export function trackerRouter(kernel: Kernel) {
         ),
         add: scoped.issues.attachments.add.handler(({ input, context }) =>
           run(context, input.workspaceId, (tx) =>
-            svc.issues.addAttachments(tx, context.principal, input.workspaceId, input.issueId, input.fileIds),
+            svc.issues.addAttachments(
+              tx,
+              context.principal,
+              input.workspaceId,
+              input.issueId,
+              input.fileIds,
+              input.commentId ?? null,
+            ),
           ),
         ),
         remove: scoped.issues.attachments.remove.handler(async ({ input, context }) => {
