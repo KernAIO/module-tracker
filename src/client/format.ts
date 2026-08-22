@@ -153,12 +153,25 @@ export function daysUntil(dueDate: string, today = new Date()): number {
   return Math.round((due - start) / 86_400_000)
 }
 
-/** Seconds of logged time as the board footer shows it ("0h", "3h", "1d 2h"). */
+/**
+ * Seconds of time as somebody would say it: `45m`, `1h 30m`, `3h`, `1d 2h`.
+ *
+ * Minutes matter below a day. Rounding to whole hours reported 90 logged minutes as "2h" and a
+ * timer running for twenty as "0h" — for an estimate that is a rounding, for time somebody tracked
+ * it is wrong, and the same function shows both.
+ *
+ * Above a day, minutes stop being the point and are dropped.
+ */
 export function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0h'
-  const hours = Math.round(seconds / 3600)
-  if (hours < 24) return `${hours}h`
-  const days = Math.floor(hours / 24)
-  const rest = hours % 24
-  return rest ? `${days}d ${rest}h` : `${days}d`
+  const totalMinutes = Math.round(seconds / 60)
+  if (totalMinutes < 60) return `${totalMinutes}m`
+
+  const totalHours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (totalHours < 24) return minutes ? `${totalHours}h ${minutes}m` : `${totalHours}h`
+
+  const days = Math.floor(totalHours / 24)
+  const hours = totalHours % 24
+  return hours ? `${days}d ${hours}h` : `${days}d`
 }
