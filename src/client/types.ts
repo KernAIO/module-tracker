@@ -1,73 +1,13 @@
 /**
  * The contract types a tracker UI works with, re-exported for hosts.
  *
- * Types only: nothing here survives compilation, so importing this file never pulls the zod schemas
- * (or the server contract) into a browser bundle. Anything that needs the schemas at runtime should
- * import `@kernhq/module-tracker/contract` instead.
+ * `export type *` rather than a hand-kept list. Types only: the form is erased at compile time, so
+ * importing this never pulls the zod schemas — or the server contract — into a browser bundle.
+ * Anything that needs the schemas at runtime should import `@kernhq/module-tracker/contract`.
+ *
+ * It used to be an allowlist, which meant every interface that reached for one more model needed a
+ * publish of this package before it could name what it was already receiving. The list guarded
+ * nothing: the types it omitted were as erased as the ones it named.
  */
 
-export type {
-  ApprovalState,
-  Attachment,
-  AvailableTransition,
-  BoardColumn,
-  Comment,
-  Component,
-  CreateIssue,
-  Cycle,
-  CycleStatus,
-  DateOnly,
-  EstimateUnit,
-  FieldDef,
-  FieldLayoutItem,
-  FieldOption,
-  FieldType,
-  GroupBy,
-  IntakeForm,
-  IntakeSubmission,
-  Issue,
-  IssueApproval,
-  IssueHistoryEntry,
-  IssueKey,
-  IssueQueryInput,
-  IssueQueryResult,
-  IssueSummary,
-  IssueTemplate,
-  KqlFieldInfo,
-  KqlParseResult,
-  KqlSuggestion,
-  Label,
-  Link,
-  Milestone,
-  OrderBy,
-  Priority,
-  Project,
-  ProjectKey,
-  ProjectMember,
-  ProjectTemplate,
-  ProjectTemplateBody,
-  ProjectTemplateId,
-  ReactionSummary,
-  RecurrenceRule,
-  RecurringIssue,
-  RelationSummary,
-  RelationType,
-  RelationView,
-  ResolvedField,
-  ResolvedLayout,
-  RichDoc,
-  StatusCategory,
-  StatusHistoryEntry,
-  StatusInfo,
-  SystemFieldId,
-  Timer,
-  TimesheetRow,
-  UpdateIssue,
-  Version,
-  View,
-  ViewDisplay,
-  ViewLayout,
-  Workflow,
-  WorkItemType,
-  Worklog,
-} from '../contract/index.js'
+export type * from '../contract/index.js'
