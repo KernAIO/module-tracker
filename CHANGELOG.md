@@ -1,5 +1,12 @@
 # @kernhq/module-tracker
 
+## 0.8.1
+
+### Patch Changes
+
+- 2891197: Export `RecurrenceRule`, `RecurringIssue` and `IssueTemplate` from `@kernhq/module-tracker/client`,
+  so an interface can name the schedules and templates it shows.
+
 ## 0.8.0
 
 ### Minor Changes
