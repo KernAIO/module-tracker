@@ -57,4 +57,5 @@ export {
   rankForIndex,
   rankSequence,
 } from './rank.js'
+export { describeApprovers, describeRule, type RuleDescription } from './rules.js'
 export type * from './types.js'
