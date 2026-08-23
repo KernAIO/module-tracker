@@ -58,8 +58,8 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@kernhq/contracts": "^0.1.0",
-    "@kernhq/kernel": "^0.1.0",
+    "@kernhq/contracts": "^0.2.0",
+    "@kernhq/kernel": "^0.2.0",
     "@kernhq/sdk": "^0.1.0",
     "@kernhq/workflow": "^0.1.0",
     "@orpc/contract": "^1.15.0",
