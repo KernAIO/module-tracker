@@ -870,6 +870,47 @@ describe('planning', () => {
     expect(nextCycle.carryOverCount).toBe(1)
   })
 
+  it('sends unfinished work to the backlog when completion names no cycle', async () => {
+    // Its own project: cycle numbering and the one-active-cycle rule are per project, and the
+    // lifecycle test above leaves a completed cycle and an upcoming one behind.
+    const own = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, {
+        key: 'PLB',
+        name: 'Backlog roll',
+        template: 'kanban',
+      } as never),
+    )
+    const now = Date.now()
+    const current = await run((tx) =>
+      svc.planning.createCycle(tx, alice(), WS_A, own.id, {
+        name: 'Now',
+        startAt: new Date(now - 86_400_000).toISOString(),
+        endAt: new Date(now + 86_400_000).toISOString(),
+      }),
+    )
+    const later = await run((tx) =>
+      svc.planning.createCycle(tx, alice(), WS_A, own.id, {
+        name: 'Later',
+        startAt: new Date(now + 2 * 86_400_000).toISOString(),
+        endAt: new Date(now + 4 * 86_400_000).toISOString(),
+      }),
+    )
+    const open = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, {
+        projectId: own.id,
+        title: 'Not finished',
+        cycleId: current.id,
+      } as never),
+    )
+    await run((tx) => svc.planning.startCycle(tx, alice(), WS_A, current.id))
+
+    // `null` is a decision, not an omission: send it to the backlog even though 'Later' exists.
+    await run((tx) => svc.planning.completeCycle(tx, alice(), WS_A, current.id, null))
+
+    expect((await run((tx) => svc.issues.get(tx, alice(), WS_A, open.id))).cycleId).toBeNull()
+    expect((await run((tx) => svc.planning.getCycle(tx, alice(), WS_A, later.id))).carryOverCount).toBe(0)
+  })
+
   it('counts issues per milestone, version, component and label', async () => {
     const milestone = await run((tx) =>
       svc.planning.createMilestone(tx, alice(), WS_A, projectId, { name: 'Launch' }),

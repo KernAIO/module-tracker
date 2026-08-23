@@ -251,8 +251,14 @@ export class PlanningService {
     await this.access.requireProject(tx, principal, workspaceId, current.projectId, 'tracker.cycle.manage')
     if (current.status === 'completed') return this.getCycle(tx, principal, workspaceId, id)
 
+    /**
+     * Where unfinished work goes. Omitting `rollToCycleId` means "wherever it should go" and picks
+     * the next upcoming cycle; passing `null` means the backlog and is obeyed. Those are different
+     * requests, so they are read differently — `?? null` would collapse them and quietly move work
+     * into a cycle the caller deliberately declined to name.
+     */
     let target: string | null = rollToCycleId ?? null
-    if (target === undefined || target === null) {
+    if (rollToCycleId === undefined) {
       const [next] = await tx
         .select({ id: cycles.id })
         .from(cycles)
