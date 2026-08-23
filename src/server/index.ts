@@ -18,6 +18,7 @@ import {
   type Issue,
   MODULE_ID,
   RichDoc,
+  trackerContract,
   trackerEvents,
   trackerNotificationTypes,
   trackerPermissions,
@@ -270,6 +271,8 @@ export const trackerModule = defineServerModule({
       { type: 'cycle', label: 'Cycle', icon: 'refresh-cw' },
     ],
   }),
+  /** Attached so the developer panel can check the router against what was promised. */
+  contract: trackerContract,
   schema,
   migrationsFolder: join(dirname(fileURLToPath(import.meta.url)), '../../migrations'),
   router: trackerRouter,
