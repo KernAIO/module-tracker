@@ -7,6 +7,7 @@ import {
   type JobDef,
   KernError,
   type Kernel,
+  packageVersion,
   type Tx,
 } from '@kernhq/kernel'
 import { and, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
@@ -255,7 +256,7 @@ export const trackerModule = defineServerModule({
   definition: defineModule({
     id: MODULE_ID,
     name: 'Tracker',
-    version: '0.1.0',
+    version: packageVersion(import.meta.url),
     description: 'Projects, issues, workflows, KQL, cycles, views, reports and time tracking',
     icon: 'square-check-big',
     core: false,
