@@ -1,5 +1,13 @@
 # @kernhq/module-tracker
 
+## 0.9.1
+
+### Patch Changes
+
+- 53e3cc4: Completing a cycle with `rollToCycleId: null` now leaves unfinished work in the backlog. It was
+  being treated as "not specified", which moved the work into the next upcoming cycle — the opposite
+  of what the caller asked for.
+
 ## 0.9.0
 
 ### Minor Changes
