@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { Principal } from '@kernhq/contracts'
+import { CollabAccess, CollabAccessInput, type Principal } from '@kernhq/contracts'
 import { createKernel, KernError, type Kernel, type Tx } from '@kernhq/kernel'
 import { sql } from 'drizzle-orm'
 import pg from 'pg'
@@ -1465,12 +1465,37 @@ describe('module procedures and cross-workspace isolation', () => {
     })
     expect(members.userIds).toContain(ALICE)
 
-    const access = await kernel.call<{ canView: boolean; canEdit: boolean }>('tracker.collab.access', {
-      workspaceId: WS_A,
-      issueId: created.id,
-      userId: ALICE,
-    })
-    expect(access).toEqual({ canView: true, canEdit: true })
+    // Exactly the payload the collab gateway sends, built through the contract rather than spelled
+    // out here: this test previously asserted `{ issueId }` in and `{ canView, canEdit }` out, which
+    // both sides of it agreed on and the gateway never did — so it passed while every real call
+    // failed validation and the gateway silently fell back to workspace membership.
+    const access = await kernel.call<CollabAccess>(
+      'tracker.collab.access',
+      CollabAccessInput.parse({ workspaceId: WS_A, type: 'issue', id: created.id, userId: ALICE }),
+    )
+    expect(CollabAccess.parse(access)).toEqual({ canRead: true, canWrite: true })
+  })
+
+  it('refuses a collaborative document type the tracker does not own', async () => {
+    const project = await run((tx) =>
+      svc.projects.create(tx, alice(), WS_A, { key: 'TYP', name: 'Typ', template: 'simple' } as never),
+    )
+    const issue = await run((tx) =>
+      svc.issues.create(tx, alice(), WS_A, { projectId: project.id, title: 'Owned' } as never),
+    )
+    const access = await kernel.call<CollabAccess>(
+      'tracker.collab.access',
+      CollabAccessInput.parse({ workspaceId: WS_A, type: 'whiteboard', id: issue.id, userId: ALICE }),
+    )
+    expect(access).toEqual({ canRead: false, canWrite: false })
+  })
+
+  it('refuses an issue the user may not see, rather than falling through to membership', async () => {
+    const access = await kernel.call<CollabAccess>(
+      'tracker.collab.access',
+      CollabAccessInput.parse({ workspaceId: WS_A, type: 'issue', id: randomUUID(), userId: ALICE }),
+    )
+    expect(access).toEqual({ canRead: false, canWrite: false })
   })
 
   it('does not leak issues between workspaces at the query layer', async () => {

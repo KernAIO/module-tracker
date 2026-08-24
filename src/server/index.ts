@@ -1,6 +1,14 @@
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { type core, Id, type Principal, UserId, WorkspaceId } from '@kernhq/contracts'
+import {
+  CollabAccess,
+  CollabAccessInput,
+  type core,
+  Id,
+  type Principal,
+  UserId,
+  WorkspaceId,
+} from '@kernhq/contracts'
 import {
   defineModule,
   defineServerModule,
@@ -407,16 +415,27 @@ export const trackerModule = defineServerModule({
         }
       },
     },
-    /** collab/docs ask whether a user may open an issue before embedding it */
+    /**
+     * Whether a user may open an issue's collaborative description.
+     *
+     * The shapes come from `@kernhq/contracts` rather than being spelled out here, because this
+     * procedure is called by the collab gateway and the two had diverged: it declared
+     * `{ workspaceId, issueId, userId }` returning `{ canView, canEdit }` while the gateway sends
+     * `{ workspaceId, type, id, userId }` and reads `{ canRead, canWrite }`. Zod rejected every call,
+     * the broker threw, and the gateway fell back to plain workspace membership — so this answer had
+     * never once been used, and nothing failed loudly enough to say so.
+     */
     'collab.access': {
-      input: z.object({ workspaceId: WorkspaceId, issueId: Id, userId: UserId }),
-      output: z.object({ canView: z.boolean(), canEdit: z.boolean() }),
+      input: CollabAccessInput,
+      output: CollabAccess,
       handler: async (input, { kernel, principal }) => {
         requireService(principal)
+        // The only collaborative document the tracker owns is an issue description.
+        if (input.type !== 'issue') return { canRead: false, canWrite: false }
         return kernel.database.withWorkspace(input.workspaceId, async (tx) => {
           const svc = trackerServices(kernel)
           try {
-            const row = await svc.issues.row(tx, input.workspaceId, input.issueId)
+            const row = await svc.issues.row(tx, input.workspaceId, input.id)
             // the caller is usually a service, so the target user's memberships come from core
             const subject =
               principal.userId === input.userId
@@ -429,24 +448,24 @@ export const trackerModule = defineServerModule({
                     instanceAdmin: false,
                     kind: 'user' as const,
                   })
-            const canView = await svc.access.can(
+            const canRead = await svc.access.can(
               subject,
               'tracker.issue.view',
               input.workspaceId,
               row.projectId,
             )
-            const canEdit =
-              canView &&
+            const canWrite =
+              canRead &&
               (await svc.access.canEditIssue(subject, input.workspaceId, row.projectId, {
                 reporterId: row.reporterId,
                 creatorId: row.creatorId,
                 assigneeIds: row.assigneeIds ?? [],
               }))
-            return { canView, canEdit }
+            return { canRead, canWrite }
           } catch (err) {
             // a missing or forbidden issue means "no access"; anything else is a real failure
             if (err instanceof KernError && (err.code === 'NOT_FOUND' || err.code === 'FORBIDDEN'))
-              return { canView: false, canEdit: false }
+              return { canRead: false, canWrite: false }
             throw err
           }
         })
