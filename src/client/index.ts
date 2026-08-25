@@ -12,6 +12,7 @@
  */
 
 export { createTrackerClient, type TrackerApi } from './api.js'
+export { __setTrackerApi, getTrackerApi } from './api-instance.js'
 export {
   type DueTone,
   daysUntil,
@@ -33,6 +34,7 @@ export {
   groupOrder,
   type IssueGroup,
 } from './group.js'
+export { type TrackerMessageKey, t, trackerMessageBundles } from './i18n.js'
 export {
   customKqlField,
   type KqlComparison,
@@ -49,6 +51,16 @@ export {
   type Span,
   SYSTEM_FIELDS,
 } from './kql.js'
+export { trackerClientModule, trackerClientModule as default } from './module.js'
+/**
+ * The public intake form, exported as a component.
+ *
+ * It is the one tracker screen that is *not* inside a workspace: somebody outside the organisation
+ * opens `/request/<token>` with no session at all, so the shell mounts it as an app route rather
+ * than through the module router, and needs the component by name.
+ */
+export { default as IntakePage } from './pages/IntakePage.svelte'
+export { canTracker, TRACKER_PERMISSIONS, type TrackerPermission } from './permissions.js'
 export {
   byRank,
   initialRank,
