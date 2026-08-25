@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.2
+
+### Patch Changes
+
+- chore: refresh the lockfile for the changesets dependency
+
 ## 0.11.1
 
 ### Patch Changes
