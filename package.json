@@ -2,13 +2,12 @@
   "name": "@kernhq/module-tracker",
   "version": "0.11.1",
   "description": "Kern tracker module: projects, work item types, custom fields, workflows, issues, KQL, cycles, views, reports, intake, time tracking (server + client skeleton)",
-  "homepage": "https://kernaio.com",
+  "homepage": "https://github.com/KernAIO/module-tracker#readme",
   "license": "AGPL-3.0-only",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/KernAIO/modules",
-    "directory": "packages/tracker"
+    "url": "git+https://github.com/KernAIO/module-tracker.git"
   },
   "publishConfig": {
     "access": "public"
@@ -52,10 +51,11 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
     "typecheck": "tsc -p tsconfig.json --noEmit && svelte-check --tsconfig ./tsconfig.client.json --threshold error",
-    "lint": "biome check .",
+    "lint": "biome check . && node scripts/check-ranges.mjs package.json",
     "test": "vitest run",
     "test:unit": "vitest run --exclude 'src/**/*.int.test.ts'",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "format": "biome check --write ."
   },
   "dependencies": {
     "@kernhq/contracts": "^0.5.1",
@@ -79,7 +79,8 @@
     "svelte": "^5.46.0",
     "svelte-check": "^4.0.0",
     "typescript": "~5.9.3",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "@biomejs/biome": "^2.0.0"
   },
   "peerDependencies": {
     "@kernhq/ui": "^0.8.0",
@@ -96,5 +97,9 @@
     "svelte": {
       "optional": true
     }
+  },
+  "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=24"
   }
 }

@@ -1,0 +1,45 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+concurrency:
+  group: "ci-${{ github.ref }}"
+  cancel-in-progress: true
+permissions: { contents: read }
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # 127.0.0.1, never localhost: a runner resolves localhost to ::1 first, where the published
+      # port is not listening, and the client does not retry over IPv4.
+      DATABASE_URL: postgres://kern:kern@127.0.0.1:5432/kern
+    services:
+      # The suites create a scratch database per file, apply the migrations and prove row-level
+      # security as an unprivileged role. Nothing is mocked, so without this they fail to start
+      # rather than quietly passing.
+      postgres:
+        image: pgvector/pgvector:pg18
+        env:
+          POSTGRES_USER: kern
+          POSTGRES_PASSWORD: kern
+          POSTGRES_DB: kern
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U kern"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      # No registry-url: it writes an .npmrc with a placeholder token, and npm answers a bad token
+      # with 404 — so every public package appears to vanish at install.
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
+      # lint includes check-ranges: a caret on 0.x does not cross a minor, so a range that cannot
+      # reach the published framework fails here rather than in a consumer's CI.
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
