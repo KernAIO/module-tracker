@@ -129,12 +129,17 @@ const commitEdit = () => {
           {/if}
         </li>
         {#if confirmingId === item.id}
-          <li class="confirm" role="alertdialog">
-            <span>{t('planning_remove_body', { name: item.name })}</span>
-            <Button size="sm" variant="danger" onclick={() => { onremove(item.id); confirmingId = null }}>
-              {t('common.delete')}
-            </Button>
-            <Button size="sm" variant="ghost" onclick={() => (confirmingId = null)}>{t('common.cancel')}</Button>
+          <!-- The role sits on a child rather than on the `<li>`: a list item is non-interactive,
+               and Svelte refuses an interactive role on one. `.confirm` moves with it and now
+               declares its own `display: flex` — it had been borrowing the `<li>`'s. -->
+          <li>
+            <div class="confirm" role="alertdialog" aria-label={t('planning_remove_body', { name: item.name })}>
+              <span>{t('planning_remove_body', { name: item.name })}</span>
+              <Button size="sm" variant="danger" onclick={() => { onremove(item.id); confirmingId = null }}>
+                {t('common.delete')}
+              </Button>
+              <Button size="sm" variant="ghost" onclick={() => (confirmingId = null)}>{t('common.cancel')}</Button>
+            </div>
           </li>
         {/if}
       {:else}
@@ -226,6 +231,9 @@ li {
   color: var(--kern-ink-400);
 }
 .confirm {
+  display: flex;
+  align-items: center;
+  flex: 1;
   gap: 8px;
   font-size: 12.5px;
   color: var(--kern-danger);

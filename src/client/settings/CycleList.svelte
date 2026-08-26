@@ -253,9 +253,13 @@ const statusLabel = (status: Cycle['status']) =>
         {/if}
 
         {#if confirmingId === cycle.id}
-          <li class="panel danger" role="alertdialog">
-            <span>{t('planning_remove_body', { name: cycle.name })}</span>
-            <div class="row">
+          <!-- The role sits on a child rather than on the `<li>`: a list item is non-interactive,
+               and Svelte refuses an interactive role on one. Every other confirmation in this
+               module already does it this way. -->
+          <li class="panel danger">
+            <div role="alertdialog" aria-label={t('planning_remove_body', { name: cycle.name })}>
+              <span>{t('planning_remove_body', { name: cycle.name })}</span>
+              <div class="row">
               <Button
                 size="sm"
                 variant="danger"
@@ -266,7 +270,8 @@ const statusLabel = (status: Cycle['status']) =>
               >
                 {t('common.delete')}
               </Button>
-              <Button size="sm" variant="ghost" onclick={() => (confirmingId = null)}>{t('common.cancel')}</Button>
+                <Button size="sm" variant="ghost" onclick={() => (confirmingId = null)}>{t('common.cancel')}</Button>
+              </div>
             </div>
           </li>
         {/if}
