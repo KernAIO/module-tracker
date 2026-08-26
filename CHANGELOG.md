@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.4
+
+### Patch Changes
+
+- docs: update repo references for kern->app and app->shell rename
+
 ## 0.11.3
 
 ### Patch Changes
