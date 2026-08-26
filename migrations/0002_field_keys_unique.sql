@@ -32,4 +32,4 @@ end $$;
 --> statement-breakpoint
 DROP INDEX IF EXISTS "mod_tracker"."field_defs_ws_project_key_uq";--> statement-breakpoint
 DROP INDEX IF EXISTS "mod_tracker"."field_defs_ws_key_uq";--> statement-breakpoint
-CREATE UNIQUE INDEX "field_defs_ws_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","key");
+CREATE UNIQUE INDEX IF NOT EXISTS "field_defs_ws_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","key");

@@ -1,6 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS "mod_tracker";
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."attachments" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."attachments" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -12,7 +12,7 @@ CREATE TABLE "mod_tracker"."attachments" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."comment_reactions" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."comment_reactions" (
 	"comment_id" uuid NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE "mod_tracker"."comment_reactions" (
 	CONSTRAINT "comment_reactions_comment_id_user_id_emoji_pk" PRIMARY KEY("comment_id","user_id","emoji")
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."comments" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."comments" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -40,7 +40,7 @@ CREATE TABLE "mod_tracker"."comments" (
 	"search" "tsvector" GENERATED ALWAYS AS (to_tsvector('simple', coalesce(body_text, ''))) STORED
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."components" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."components" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -52,7 +52,7 @@ CREATE TABLE "mod_tracker"."components" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."cycles" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."cycles" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE "mod_tracker"."cycles" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."field_defs" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."field_defs" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -90,7 +90,7 @@ CREATE TABLE "mod_tracker"."field_defs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."field_schemes" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."field_schemes" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -98,13 +98,13 @@ CREATE TABLE "mod_tracker"."field_schemes" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."hierarchy_rules" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."hierarchy_rules" (
 	"workspace_id" uuid PRIMARY KEY NOT NULL,
 	"rules" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."import_jobs" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."import_jobs" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -120,14 +120,14 @@ CREATE TABLE "mod_tracker"."import_jobs" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."intake_tokens" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."intake_tokens" (
 	"token" text PRIMARY KEY NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issue_approvals" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issue_approvals" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -137,14 +137,14 @@ CREATE TABLE "mod_tracker"."issue_approvals" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issue_counters" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issue_counters" (
 	"project_id" uuid PRIMARY KEY NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"last_issue_number" integer DEFAULT 0 NOT NULL,
 	"last_cycle_number" integer DEFAULT 0 NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issue_history" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issue_history" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -155,7 +155,7 @@ CREATE TABLE "mod_tracker"."issue_history" (
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issue_status_history" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issue_status_history" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -170,7 +170,7 @@ CREATE TABLE "mod_tracker"."issue_status_history" (
 	"occurred_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issue_templates" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issue_templates" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -184,7 +184,7 @@ CREATE TABLE "mod_tracker"."issue_templates" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."issues" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."issues" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -235,7 +235,7 @@ CREATE TABLE "mod_tracker"."issues" (
 	"search" "tsvector" GENERATED ALWAYS AS (to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(description_text, ''))) STORED
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."labels" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."labels" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -247,7 +247,7 @@ CREATE TABLE "mod_tracker"."labels" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."links" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."links" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -258,7 +258,7 @@ CREATE TABLE "mod_tracker"."links" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."milestones" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."milestones" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -271,7 +271,7 @@ CREATE TABLE "mod_tracker"."milestones" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."project_members" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."project_members" (
 	"project_id" uuid NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -281,7 +281,7 @@ CREATE TABLE "mod_tracker"."project_members" (
 	CONSTRAINT "project_members_project_id_user_id_pk" PRIMARY KEY("project_id","user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."project_templates" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."project_templates" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"key" text NOT NULL,
@@ -293,7 +293,7 @@ CREATE TABLE "mod_tracker"."project_templates" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."projects" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."projects" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"key" text NOT NULL,
@@ -316,7 +316,7 @@ CREATE TABLE "mod_tracker"."projects" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."recurring_issues" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."recurring_issues" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -333,7 +333,7 @@ CREATE TABLE "mod_tracker"."recurring_issues" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."relations" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."relations" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"type" text NOT NULL,
@@ -343,7 +343,7 @@ CREATE TABLE "mod_tracker"."relations" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."timers" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."timers" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"issue_id" uuid NOT NULL,
@@ -352,7 +352,7 @@ CREATE TABLE "mod_tracker"."timers" (
 	"note" text
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."type_schemes" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."type_schemes" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -361,7 +361,7 @@ CREATE TABLE "mod_tracker"."type_schemes" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."versions" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."versions" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -376,7 +376,7 @@ CREATE TABLE "mod_tracker"."versions" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."view_pins" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."view_pins" (
 	"view_id" uuid NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"user_id" uuid NOT NULL,
@@ -384,7 +384,7 @@ CREATE TABLE "mod_tracker"."view_pins" (
 	CONSTRAINT "view_pins_view_id_user_id_pk" PRIMARY KEY("view_id","user_id")
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."views" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."views" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -403,7 +403,7 @@ CREATE TABLE "mod_tracker"."views" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."work_item_types" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."work_item_types" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -423,7 +423,7 @@ CREATE TABLE "mod_tracker"."work_item_types" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."workflow_schemes" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."workflow_schemes" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"name" text NOT NULL,
@@ -433,7 +433,7 @@ CREATE TABLE "mod_tracker"."workflow_schemes" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."workflows" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."workflows" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid,
@@ -446,7 +446,7 @@ CREATE TABLE "mod_tracker"."workflows" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."worklogs" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."worklogs" (
 	"id" uuid PRIMARY KEY DEFAULT uuidv7() NOT NULL,
 	"workspace_id" uuid NOT NULL,
 	"project_id" uuid NOT NULL,
@@ -460,70 +460,70 @@ CREATE TABLE "mod_tracker"."worklogs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "mod_tracker"."workspaces" (
+CREATE TABLE IF NOT EXISTS "mod_tracker"."workspaces" (
 	"workspace_id" uuid PRIMARY KEY NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX "attachments_issue_file_uq" ON "mod_tracker"."attachments" USING btree ("issue_id","file_id");--> statement-breakpoint
-CREATE INDEX "attachments_issue_idx" ON "mod_tracker"."attachments" USING btree ("issue_id","created_at");--> statement-breakpoint
-CREATE INDEX "comments_issue_idx" ON "mod_tracker"."comments" USING btree ("issue_id","created_at");--> statement-breakpoint
-CREATE INDEX "comments_thread_idx" ON "mod_tracker"."comments" USING btree ("parent_id","created_at") WHERE parent_id is not null;--> statement-breakpoint
-CREATE INDEX "comments_search_idx" ON "mod_tracker"."comments" USING gin ("search");--> statement-breakpoint
-CREATE UNIQUE INDEX "components_project_name_uq" ON "mod_tracker"."components" USING btree ("project_id","name");--> statement-breakpoint
-CREATE UNIQUE INDEX "cycles_project_number_uq" ON "mod_tracker"."cycles" USING btree ("project_id","number");--> statement-breakpoint
-CREATE INDEX "cycles_project_status_idx" ON "mod_tracker"."cycles" USING btree ("project_id","status","start_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "field_defs_ws_project_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","project_id","key") WHERE project_id is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "field_defs_ws_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","key") WHERE project_id is null;--> statement-breakpoint
-CREATE INDEX "field_defs_ws_idx" ON "mod_tracker"."field_defs" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
-CREATE INDEX "field_schemes_ws_idx" ON "mod_tracker"."field_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
-CREATE INDEX "import_jobs_project_idx" ON "mod_tracker"."import_jobs" USING btree ("project_id","created_at");--> statement-breakpoint
-CREATE UNIQUE INDEX "issue_approvals_issue_transition_uq" ON "mod_tracker"."issue_approvals" USING btree ("issue_id","transition_id");--> statement-breakpoint
-CREATE INDEX "issue_history_issue_idx" ON "mod_tracker"."issue_history" USING btree ("issue_id","occurred_at");--> statement-breakpoint
-CREATE INDEX "issue_status_history_issue_idx" ON "mod_tracker"."issue_status_history" USING btree ("issue_id","occurred_at");--> statement-breakpoint
-CREATE INDEX "issue_status_history_project_idx" ON "mod_tracker"."issue_status_history" USING btree ("project_id","occurred_at");--> statement-breakpoint
-CREATE INDEX "issue_templates_ws_idx" ON "mod_tracker"."issue_templates" USING btree ("workspace_id","project_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "issues_ws_key_uq" ON "mod_tracker"."issues" USING btree ("workspace_id","key");--> statement-breakpoint
-CREATE UNIQUE INDEX "issues_project_number_uq" ON "mod_tracker"."issues" USING btree ("project_id","number");--> statement-breakpoint
-CREATE INDEX "issues_ws_project_rank_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id","rank");--> statement-breakpoint
-CREATE INDEX "issues_ws_project_status_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id","status_id");--> statement-breakpoint
-CREATE INDEX "issues_ws_updated_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","updated_at");--> statement-breakpoint
-CREATE INDEX "issues_ws_cycle_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","cycle_id") WHERE cycle_id is not null;--> statement-breakpoint
-CREATE INDEX "issues_ws_parent_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","parent_id") WHERE parent_id is not null;--> statement-breakpoint
-CREATE INDEX "issues_ws_due_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","due_date") WHERE due_date is not null;--> statement-breakpoint
-CREATE INDEX "issues_ws_triage_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id") WHERE triage;--> statement-breakpoint
-CREATE INDEX "issues_external_ref_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","external_ref") WHERE external_ref is not null;--> statement-breakpoint
-CREATE INDEX "issues_assignees_idx" ON "mod_tracker"."issues" USING gin ("assignee_ids");--> statement-breakpoint
-CREATE INDEX "issues_labels_idx" ON "mod_tracker"."issues" USING gin ("label_ids");--> statement-breakpoint
-CREATE INDEX "issues_components_idx" ON "mod_tracker"."issues" USING gin ("component_ids");--> statement-breakpoint
-CREATE INDEX "issues_versions_idx" ON "mod_tracker"."issues" USING gin ("version_ids");--> statement-breakpoint
-CREATE INDEX "issues_watchers_idx" ON "mod_tracker"."issues" USING gin ("watcher_ids");--> statement-breakpoint
-CREATE INDEX "issues_custom_idx" ON "mod_tracker"."issues" USING gin ("custom");--> statement-breakpoint
-CREATE INDEX "issues_search_idx" ON "mod_tracker"."issues" USING gin ("search");--> statement-breakpoint
-CREATE UNIQUE INDEX "labels_project_name_uq" ON "mod_tracker"."labels" USING btree ("project_id","name") WHERE project_id is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "labels_ws_name_uq" ON "mod_tracker"."labels" USING btree ("workspace_id","name") WHERE project_id is null;--> statement-breakpoint
-CREATE INDEX "labels_ws_idx" ON "mod_tracker"."labels" USING btree ("workspace_id","project_id");--> statement-breakpoint
-CREATE INDEX "links_issue_idx" ON "mod_tracker"."links" USING btree ("issue_id","created_at");--> statement-breakpoint
-CREATE INDEX "milestones_project_idx" ON "mod_tracker"."milestones" USING btree ("project_id","target_date");--> statement-breakpoint
-CREATE INDEX "project_members_ws_user_idx" ON "mod_tracker"."project_members" USING btree ("workspace_id","user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "project_templates_ws_key_uq" ON "mod_tracker"."project_templates" USING btree ("workspace_id","key");--> statement-breakpoint
-CREATE UNIQUE INDEX "projects_ws_key_uq" ON "mod_tracker"."projects" USING btree ("workspace_id","key");--> statement-breakpoint
-CREATE UNIQUE INDEX "projects_intake_token_uq" ON "mod_tracker"."projects" USING btree ("intake_token") WHERE intake_token is not null;--> statement-breakpoint
-CREATE INDEX "projects_ws_idx" ON "mod_tracker"."projects" USING btree ("workspace_id","archived_at");--> statement-breakpoint
-CREATE INDEX "recurring_issues_project_idx" ON "mod_tracker"."recurring_issues" USING btree ("project_id");--> statement-breakpoint
-CREATE INDEX "recurring_issues_due_idx" ON "mod_tracker"."recurring_issues" USING btree ("next_run_at") WHERE enabled;--> statement-breakpoint
-CREATE UNIQUE INDEX "relations_edge_uq" ON "mod_tracker"."relations" USING btree ("from_issue_id","to_issue_id","type");--> statement-breakpoint
-CREATE INDEX "relations_to_idx" ON "mod_tracker"."relations" USING btree ("to_issue_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "timers_ws_user_uq" ON "mod_tracker"."timers" USING btree ("workspace_id","user_id");--> statement-breakpoint
-CREATE INDEX "type_schemes_ws_idx" ON "mod_tracker"."type_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
-CREATE INDEX "versions_project_idx" ON "mod_tracker"."versions" USING btree ("project_id","order");--> statement-breakpoint
-CREATE INDEX "view_pins_ws_user_idx" ON "mod_tracker"."view_pins" USING btree ("workspace_id","user_id");--> statement-breakpoint
-CREATE INDEX "views_ws_idx" ON "mod_tracker"."views" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
-CREATE UNIQUE INDEX "work_item_types_ws_project_key_uq" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","project_id","key") WHERE project_id is not null;--> statement-breakpoint
-CREATE UNIQUE INDEX "work_item_types_ws_key_uq" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","key") WHERE project_id is null;--> statement-breakpoint
-CREATE INDEX "work_item_types_ws_idx" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
-CREATE INDEX "workflow_schemes_ws_idx" ON "mod_tracker"."workflow_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
-CREATE INDEX "workflows_ws_idx" ON "mod_tracker"."workflows" USING btree ("workspace_id","project_id","archived_at");--> statement-breakpoint
-CREATE INDEX "worklogs_issue_idx" ON "mod_tracker"."worklogs" USING btree ("issue_id","started_at");--> statement-breakpoint
-CREATE INDEX "worklogs_ws_user_started_idx" ON "mod_tracker"."worklogs" USING btree ("workspace_id","user_id","started_at");--> statement-breakpoint
-CREATE INDEX "worklogs_project_started_idx" ON "mod_tracker"."worklogs" USING btree ("project_id","started_at");
+CREATE UNIQUE INDEX IF NOT EXISTS "attachments_issue_file_uq" ON "mod_tracker"."attachments" USING btree ("issue_id","file_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "attachments_issue_idx" ON "mod_tracker"."attachments" USING btree ("issue_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "comments_issue_idx" ON "mod_tracker"."comments" USING btree ("issue_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "comments_thread_idx" ON "mod_tracker"."comments" USING btree ("parent_id","created_at") WHERE parent_id is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "comments_search_idx" ON "mod_tracker"."comments" USING gin ("search");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "components_project_name_uq" ON "mod_tracker"."components" USING btree ("project_id","name");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "cycles_project_number_uq" ON "mod_tracker"."cycles" USING btree ("project_id","number");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "cycles_project_status_idx" ON "mod_tracker"."cycles" USING btree ("project_id","status","start_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "field_defs_ws_project_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","project_id","key") WHERE project_id is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "field_defs_ws_key_uq" ON "mod_tracker"."field_defs" USING btree ("workspace_id","key") WHERE project_id is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "field_defs_ws_idx" ON "mod_tracker"."field_defs" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "field_schemes_ws_idx" ON "mod_tracker"."field_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "import_jobs_project_idx" ON "mod_tracker"."import_jobs" USING btree ("project_id","created_at");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "issue_approvals_issue_transition_uq" ON "mod_tracker"."issue_approvals" USING btree ("issue_id","transition_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issue_history_issue_idx" ON "mod_tracker"."issue_history" USING btree ("issue_id","occurred_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issue_status_history_issue_idx" ON "mod_tracker"."issue_status_history" USING btree ("issue_id","occurred_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issue_status_history_project_idx" ON "mod_tracker"."issue_status_history" USING btree ("project_id","occurred_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issue_templates_ws_idx" ON "mod_tracker"."issue_templates" USING btree ("workspace_id","project_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "issues_ws_key_uq" ON "mod_tracker"."issues" USING btree ("workspace_id","key");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "issues_project_number_uq" ON "mod_tracker"."issues" USING btree ("project_id","number");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_project_rank_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id","rank");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_project_status_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id","status_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_updated_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","updated_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_cycle_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","cycle_id") WHERE cycle_id is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_parent_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","parent_id") WHERE parent_id is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_due_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","due_date") WHERE due_date is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_ws_triage_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","project_id") WHERE triage;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_external_ref_idx" ON "mod_tracker"."issues" USING btree ("workspace_id","external_ref") WHERE external_ref is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_assignees_idx" ON "mod_tracker"."issues" USING gin ("assignee_ids");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_labels_idx" ON "mod_tracker"."issues" USING gin ("label_ids");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_components_idx" ON "mod_tracker"."issues" USING gin ("component_ids");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_versions_idx" ON "mod_tracker"."issues" USING gin ("version_ids");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_watchers_idx" ON "mod_tracker"."issues" USING gin ("watcher_ids");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_custom_idx" ON "mod_tracker"."issues" USING gin ("custom");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "issues_search_idx" ON "mod_tracker"."issues" USING gin ("search");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "labels_project_name_uq" ON "mod_tracker"."labels" USING btree ("project_id","name") WHERE project_id is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "labels_ws_name_uq" ON "mod_tracker"."labels" USING btree ("workspace_id","name") WHERE project_id is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "labels_ws_idx" ON "mod_tracker"."labels" USING btree ("workspace_id","project_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "links_issue_idx" ON "mod_tracker"."links" USING btree ("issue_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "milestones_project_idx" ON "mod_tracker"."milestones" USING btree ("project_id","target_date");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "project_members_ws_user_idx" ON "mod_tracker"."project_members" USING btree ("workspace_id","user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "project_templates_ws_key_uq" ON "mod_tracker"."project_templates" USING btree ("workspace_id","key");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "projects_ws_key_uq" ON "mod_tracker"."projects" USING btree ("workspace_id","key");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "projects_intake_token_uq" ON "mod_tracker"."projects" USING btree ("intake_token") WHERE intake_token is not null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "projects_ws_idx" ON "mod_tracker"."projects" USING btree ("workspace_id","archived_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "recurring_issues_project_idx" ON "mod_tracker"."recurring_issues" USING btree ("project_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "recurring_issues_due_idx" ON "mod_tracker"."recurring_issues" USING btree ("next_run_at") WHERE enabled;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "relations_edge_uq" ON "mod_tracker"."relations" USING btree ("from_issue_id","to_issue_id","type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "relations_to_idx" ON "mod_tracker"."relations" USING btree ("to_issue_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "timers_ws_user_uq" ON "mod_tracker"."timers" USING btree ("workspace_id","user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "type_schemes_ws_idx" ON "mod_tracker"."type_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "versions_project_idx" ON "mod_tracker"."versions" USING btree ("project_id","order");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "view_pins_ws_user_idx" ON "mod_tracker"."view_pins" USING btree ("workspace_id","user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "views_ws_idx" ON "mod_tracker"."views" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "work_item_types_ws_project_key_uq" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","project_id","key") WHERE project_id is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "work_item_types_ws_key_uq" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","key") WHERE project_id is null;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "work_item_types_ws_idx" ON "mod_tracker"."work_item_types" USING btree ("workspace_id","project_id","order");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "workflow_schemes_ws_idx" ON "mod_tracker"."workflow_schemes" USING btree ("workspace_id","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "workflows_ws_idx" ON "mod_tracker"."workflows" USING btree ("workspace_id","project_id","archived_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "worklogs_issue_idx" ON "mod_tracker"."worklogs" USING btree ("issue_id","started_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "worklogs_ws_user_started_idx" ON "mod_tracker"."worklogs" USING btree ("workspace_id","user_id","started_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "worklogs_project_started_idx" ON "mod_tracker"."worklogs" USING btree ("project_id","started_at");
