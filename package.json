@@ -59,8 +59,6 @@
     "changeset": "changeset"
   },
   "dependencies": {
-    "@kernhq/contracts": "^0.5.1",
-    "@kernhq/kernel": "^0.7.0",
     "@kernhq/sdk": "^0.1.5",
     "@kernhq/workflow": "^0.1.0",
     "@orpc/contract": "^1.15.0",
@@ -72,6 +70,8 @@
   "devDependencies": {
     "@biomejs/biome": "^2.0.0",
     "@changesets/cli": "^2.27.0",
+    "@kernhq/contracts": "^0.5.1",
+    "@kernhq/kernel": "^0.7.0",
     "@kernhq/tsconfig": "^0.1.0",
     "@kernhq/ui": "^0.8.0",
     "@tanstack/svelte-query": "^6.1.0",
@@ -85,6 +85,8 @@
     "vitest": "^4.0.0"
   },
   "peerDependencies": {
+    "@kernhq/contracts": "^0.5.1",
+    "@kernhq/kernel": "^0.7.0",
     "@kernhq/ui": "^0.8.0",
     "@tanstack/svelte-query": "^6.1.0",
     "svelte": "^5.46.0"
