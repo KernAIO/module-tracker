@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.3
+
+### Patch Changes
+
+- fix: declare @kernhq/kernel and @kernhq/contracts as peerDependencies
+
 ## 0.11.2
 
 ### Patch Changes
