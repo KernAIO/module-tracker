@@ -46,8 +46,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@kernhq/ui':
-        specifier: ^0.9.0
-        version: 0.9.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
+        specifier: ^0.10.0
+        version: 0.10.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
       '@tanstack/svelte-query':
         specifier: ^6.1.0
         version: 6.1.43(svelte@5.56.10)
@@ -822,8 +822,8 @@ packages:
   '@kernhq/tsconfig@0.1.1':
     resolution: {integrity: sha512-dpsKywRORVpmPlvGBaBlzhhmsAJ8LY2MBj0T9fdo7mGVN7r6+DyYVs6yuLUc/YtV+Ll1riAGnQN/tpxKMb3vnA==}
 
-  '@kernhq/ui@0.9.0':
-    resolution: {integrity: sha512-GPhOCOcQCo9GW7WWghv3GuNPqPENL4h0O++fC63t3fsdJZLFvB4fNB3xsn6cAmdfSpE/gKLRiw0GqrLz0aYhAw==}
+  '@kernhq/ui@0.10.0':
+    resolution: {integrity: sha512-CQsVjODyvyoY7fLEmYSnfChN48g29fr3l9bf20Yhxv1LdnkA0KW+rAjXNlBcjhhSqs3gpNVE57kR2tIaMiI82g==}
     peerDependencies:
       '@tanstack/svelte-query': ^6.1.0
       svelte: ^5.46.0
@@ -3425,7 +3425,7 @@ snapshots:
 
   '@kernhq/tsconfig@0.1.1': {}
 
-  '@kernhq/ui@0.9.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
+  '@kernhq/ui@0.10.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
     dependencies:
       '@hocuspocus/provider': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@kernhq/contracts': 0.6.1

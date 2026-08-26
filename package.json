@@ -73,7 +73,7 @@
     "@kernhq/contracts": "^0.6.1",
     "@kernhq/kernel": "^0.7.0",
     "@kernhq/tsconfig": "^0.1.0",
-    "@kernhq/ui": "^0.9.0",
+    "@kernhq/ui": "^0.10.0",
     "@tanstack/svelte-query": "^6.1.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.15.0",
@@ -87,7 +87,7 @@
   "peerDependencies": {
     "@kernhq/contracts": "^0.6.1",
     "@kernhq/kernel": "^0.7.0",
-    "@kernhq/ui": "^0.9.0",
+    "@kernhq/ui": "^0.10.0",
     "@tanstack/svelte-query": "^6.1.0",
     "svelte": "^5.46.0"
   },
