@@ -37,8 +37,8 @@ importers:
         specifier: ^2.27.0
         version: 2.31.1(@types/node@24.13.3)
       '@kernhq/contracts':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.7.0
+        version: 0.7.0
       '@kernhq/kernel':
         specifier: ^0.7.0
         version: 0.7.0(@types/pg@8.23.1)
@@ -806,6 +806,9 @@ packages:
 
   '@kernhq/contracts@0.6.1':
     resolution: {integrity: sha512-lrMwaZFnoM1sK0wjJ+VDz51fWrnaHPigqhNk1C04+GgX5eIMZz3DQMuFreJrqAQF/0vGBDKTKzwmhc7rcGEqDw==}
+
+  '@kernhq/contracts@0.7.0':
+    resolution: {integrity: sha512-cp+dM+ScKi7hZ7hwsg+t9VpLoX8+oRnSfCydWJa6iQAtvjt+RBmgZNv67X9Du4b0I+AA24FpI6hyb2NTaMcLUw==}
 
   '@kernhq/kernel@0.7.0':
     resolution: {integrity: sha512-XIgOpkhSCsekFyJdf8a3iQ29KjqxbJRJXHPYWNwMznh6WXPSsb0T+xuOTtboGZPDU3VjmM6nG1ID5qpDBvzMew==}
@@ -3285,6 +3288,13 @@ snapshots:
       - '@opentelemetry/api'
 
   '@kernhq/contracts@0.6.1':
+    dependencies:
+      '@orpc/contract': 1.15.0
+      zod: 4.4.3
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+
+  '@kernhq/contracts@0.7.0':
     dependencies:
       '@orpc/contract': 1.15.0
       zod: 4.4.3
