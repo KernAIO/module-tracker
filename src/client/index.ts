@@ -6,7 +6,7 @@
  * priorities and due dates, grouping for the list and the board, fractional ranks for drag and drop,
  * and a KQL reader for the query box.
  *
- * The Svelte views themselves live in the host app (`repos/app/src/lib/modules/tracker`) for now:
+ * The Svelte views themselves live in the host app (`repos/shell/src/lib/modules/tracker`) for now:
  * the shell renders module pages as real SvelteKit routes rather than through `ClientModule.routes`,
  * so shipping components from here would have nowhere to be mounted.
  */
