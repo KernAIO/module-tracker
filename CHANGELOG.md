@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.8
+
+### Patch Changes
+
+- fix(tracker): move alertdialog off the list item it sat on
+
 ## 0.11.7
 
 ### Patch Changes
