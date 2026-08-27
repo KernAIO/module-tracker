@@ -46,8 +46,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@kernhq/ui':
-        specifier: ^0.10.0
-        version: 0.10.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
+        specifier: ^0.12.5
+        version: 0.12.5(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
       '@tanstack/svelte-query':
         specifier: ^6.1.0
         version: 6.1.43(svelte@5.56.10)
@@ -804,29 +804,26 @@ packages:
   '@kernhq/contracts@0.5.1':
     resolution: {integrity: sha512-gderfMVPCEycarKTLS6YG3SekXmA+2vv7InT5vbUBCBVr47HdtcwFrzjCwD0YyVv4tQzMZH/vT43GOA2vydFrw==}
 
-  '@kernhq/contracts@0.6.1':
-    resolution: {integrity: sha512-lrMwaZFnoM1sK0wjJ+VDz51fWrnaHPigqhNk1C04+GgX5eIMZz3DQMuFreJrqAQF/0vGBDKTKzwmhc7rcGEqDw==}
-
   '@kernhq/contracts@0.7.0':
     resolution: {integrity: sha512-cp+dM+ScKi7hZ7hwsg+t9VpLoX8+oRnSfCydWJa6iQAtvjt+RBmgZNv67X9Du4b0I+AA24FpI6hyb2NTaMcLUw==}
 
   '@kernhq/kernel@0.7.0':
     resolution: {integrity: sha512-XIgOpkhSCsekFyJdf8a3iQ29KjqxbJRJXHPYWNwMznh6WXPSsb0T+xuOTtboGZPDU3VjmM6nG1ID5qpDBvzMew==}
 
-  '@kernhq/kernel@0.7.2':
-    resolution: {integrity: sha512-58IaQRAa0VbQC29Lj64bj+AjCvAlUQlRygWlv/V1UrcXqlHxZ+V+9qqrvWIXUUb7TrUsjItIQwfRJhSyUPKl5w==}
+  '@kernhq/kernel@0.7.3':
+    resolution: {integrity: sha512-sU7EEHs3AKuJ1W2R1r9jEZtovWRa1HNKwk0DVguhKNaUmWwgubkZU6E8ulR2xpy227LCIWkPUF8g54COqHzHJA==}
 
   '@kernhq/sdk@0.1.5':
     resolution: {integrity: sha512-+dmK3PZCnt6pqFOK5F198rv1Rxy4GVwAhF9k+Jc96Fyfj3nUGDF7zMeuKRtrgP6kbEGRfm1QzakUMEDlARFHUA==}
 
-  '@kernhq/sdk@0.1.8':
-    resolution: {integrity: sha512-q5YOZ73eeCfX1pH89EEvYBH//W/N9XUw8K8/c9/hUNmPzFWfq85+ZWAN+KjfbB5TG3DDO5OLXn0QBYgSmvQtUg==}
+  '@kernhq/sdk@0.1.9':
+    resolution: {integrity: sha512-ATzEaXUbBy5OMqX34tc/JeOXQdR8yAvxTdIatnzpHLjYMdteaxeOyEmADOIZWtXo6uiURq7DWYtHCqWK2+XQSQ==}
 
   '@kernhq/tsconfig@0.1.1':
     resolution: {integrity: sha512-dpsKywRORVpmPlvGBaBlzhhmsAJ8LY2MBj0T9fdo7mGVN7r6+DyYVs6yuLUc/YtV+Ll1riAGnQN/tpxKMb3vnA==}
 
-  '@kernhq/ui@0.10.0':
-    resolution: {integrity: sha512-CQsVjODyvyoY7fLEmYSnfChN48g29fr3l9bf20Yhxv1LdnkA0KW+rAjXNlBcjhhSqs3gpNVE57kR2tIaMiI82g==}
+  '@kernhq/ui@0.12.5':
+    resolution: {integrity: sha512-W9eFyO1QQZPR6mtfovEgT+rz1YyEHahSy0AgXfhZJxZVvBLDpbvxGaVYaIoMUOzPuqaghRYt9w2BOkHleCsrZw==}
     peerDependencies:
       '@tanstack/svelte-query': ^6.1.0
       svelte: ^5.46.0
@@ -3287,13 +3284,6 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@kernhq/contracts@0.6.1':
-    dependencies:
-      '@orpc/contract': 1.15.0
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@opentelemetry/api'
-
   '@kernhq/contracts@0.7.0':
     dependencies:
       '@orpc/contract': 1.15.0
@@ -3358,14 +3348,14 @@ snapshots:
       - supports-color
       - ws
 
-  '@kernhq/kernel@0.7.2(@types/pg@8.23.1)':
+  '@kernhq/kernel@0.7.3(@types/pg@8.23.1)':
     dependencies:
       '@aws-sdk/client-s3': 3.1115.0
       '@aws-sdk/s3-request-presigner': 3.1115.0
       '@fastify/cors': 11.3.0
       '@fastify/helmet': 13.1.1
       '@fastify/rate-limit': 10.3.0
-      '@kernhq/contracts': 0.6.1
+      '@kernhq/contracts': 0.7.0
       '@orpc/contract': 1.15.0
       '@orpc/openapi': 1.15.0(fastify@5.12.1)
       '@orpc/server': 1.15.0(fastify@5.12.1)
@@ -3424,9 +3414,9 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@kernhq/sdk@0.1.8':
+  '@kernhq/sdk@0.1.9':
     dependencies:
-      '@kernhq/contracts': 0.6.1
+      '@kernhq/contracts': 0.7.0
       '@orpc/client': 1.15.0
       '@orpc/contract': 1.15.0
       zod: 4.4.3
@@ -3435,12 +3425,12 @@ snapshots:
 
   '@kernhq/tsconfig@0.1.1': {}
 
-  '@kernhq/ui@0.10.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
+  '@kernhq/ui@0.12.5(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
     dependencies:
       '@hocuspocus/provider': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
-      '@kernhq/contracts': 0.6.1
-      '@kernhq/kernel': 0.7.2(@types/pg@8.23.1)
-      '@kernhq/sdk': 0.1.8
+      '@kernhq/contracts': 0.7.0
+      '@kernhq/kernel': 0.7.3(@types/pg@8.23.1)
+      '@kernhq/sdk': 0.1.9
       '@lucide/svelte': 1.34.0(svelte@5.56.10)
       '@tanstack/svelte-query': 6.1.43(svelte@5.56.10)
       '@tiptap/core': 3.30.5(@tiptap/pm@3.30.5)
