@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.9
+
+### Patch Changes
+
+- fix(deps): reach the published @kernhq/ui, so there is only one of it
+
 ## 0.11.8
 
 ### Patch Changes
