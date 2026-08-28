@@ -115,6 +115,14 @@ export class CommentService {
     if (!opts.silent && opts.source !== 'system')
       await this.access.requireProject(tx, principal, workspaceId, issue.projectId, 'tracker.issue.comment')
 
+    // `parentId` arrives from the caller, so it is proved to be a comment on *this* issue in *this*
+    // workspace before anything points at it. Without that, a reply threads itself under a stranger's
+    // comment and the reply-count update below lands on another tenant's row.
+    if (opts.parentId) {
+      const parent = await this.get(tx, workspaceId, opts.parentId)
+      if (parent.issueId !== issueId) throw KernError.notFound('Comment')
+    }
+
     const bodyText = docToText(body)
     const mentionIds = extractMentions(body)
     const id = uuidv7()
@@ -138,7 +146,7 @@ export class CommentService {
       await tx
         .update(comments)
         .set({ replyCount: sql`${comments.replyCount} + 1` })
-        .where(eq(comments.id, opts.parentId))
+        .where(and(eq(comments.workspaceId, workspaceId), eq(comments.id, opts.parentId)))
 
     const watchers = new Set(this.issuesService.watchersOf(issue))
     if (authorId) watchers.add(authorId)

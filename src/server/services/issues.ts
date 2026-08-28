@@ -231,7 +231,7 @@ export class IssueService {
 
     const assigneeIds = await this.defaultAssignees(tx, project, data, type.id)
     const labelIds = await this.enforceLabelGroups(tx, workspaceId, data.labelIds ?? [])
-    await this.assertPlanningRefs(tx, project.id, data)
+    await this.assertPlanningRefs(tx, workspaceId, project.id, data)
 
     const description = (data.description ?? null) as RichDoc | null
     const descriptionText = docToText(description)
@@ -420,7 +420,12 @@ export class IssueService {
   ): Promise<string[]> {
     if (input.assigneeIds?.length) return uniq(input.assigneeIds)
     if (input.componentIds?.length) {
-      const rows = await tx.select().from(components).where(inArray(components.id, input.componentIds))
+      const rows = await tx
+        .select()
+        .from(components)
+        .where(
+          and(eq(components.workspaceId, project.workspaceId), inArray(components.id, input.componentIds)),
+        )
       for (const component of rows) {
         if (component.defaultAssignee === 'lead' && component.leadId) return [component.leadId]
         if (component.defaultAssignee === 'none') return []
@@ -450,20 +455,31 @@ export class IssueService {
     return [...out, ...byGroup.values()]
   }
 
-  private async assertPlanningRefs(tx: Tx, projectId: string, input: Partial<CreateIssue>): Promise<void> {
+  private async assertPlanningRefs(
+    tx: Tx,
+    workspaceId: string,
+    projectId: string,
+    input: Partial<CreateIssue>,
+  ): Promise<void> {
     if (input.cycleId) {
-      const [row] = await tx.select({ p: cycles.projectId }).from(cycles).where(eq(cycles.id, input.cycleId))
+      const [row] = await tx
+        .select({ p: cycles.projectId })
+        .from(cycles)
+        .where(and(eq(cycles.workspaceId, workspaceId), eq(cycles.id, input.cycleId)))
       if (!row || row.p !== projectId) throw KernError.badRequest('Cycle belongs to another project')
     }
     if (input.milestoneId) {
       const [row] = await tx
         .select({ p: milestones.projectId })
         .from(milestones)
-        .where(eq(milestones.id, input.milestoneId))
+        .where(and(eq(milestones.workspaceId, workspaceId), eq(milestones.id, input.milestoneId)))
       if (!row || row.p !== projectId) throw KernError.badRequest('Milestone belongs to another project')
     }
     for (const id of [...(input.versionIds ?? []), ...(input.affectsVersionIds ?? [])]) {
-      const [row] = await tx.select({ p: versions.projectId }).from(versions).where(eq(versions.id, id))
+      const [row] = await tx
+        .select({ p: versions.projectId })
+        .from(versions)
+        .where(and(eq(versions.workspaceId, workspaceId), eq(versions.id, id)))
       if (!row || row.p !== projectId) throw KernError.badRequest('Version belongs to another project')
     }
   }
@@ -731,7 +747,7 @@ export class IssueService {
       track('affectsVersionIds', current.affectsVersionIds ?? [], uniq(patch.affectsVersionIds))
     if (patch.cycleId !== undefined) track('cycleId', current.cycleId, patch.cycleId)
     if (patch.milestoneId !== undefined) track('milestoneId', current.milestoneId, patch.milestoneId)
-    await this.assertPlanningRefs(tx, current.projectId, {
+    await this.assertPlanningRefs(tx, workspaceId, current.projectId, {
       cycleId: patch.cycleId ?? undefined,
       milestoneId: patch.milestoneId ?? undefined,
       versionIds: patch.versionIds,

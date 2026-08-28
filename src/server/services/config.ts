@@ -314,7 +314,10 @@ export class ConfigService {
   }
 
   async deleteTypeScheme(tx: Tx, workspaceId: string, id: string): Promise<void> {
-    await tx.update(projects).set({ typeSchemeId: null }).where(eq(projects.typeSchemeId, id))
+    await tx
+      .update(projects)
+      .set({ typeSchemeId: null })
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.typeSchemeId, id)))
     await tx.delete(typeSchemes).where(and(eq(typeSchemes.workspaceId, workspaceId), eq(typeSchemes.id, id)))
     await this.announce(workspaceId, 'type_scheme', id, 'deleted')
   }
@@ -743,7 +746,10 @@ export class ConfigService {
   }
 
   async deleteWorkflowScheme(tx: Tx, workspaceId: string, id: string): Promise<void> {
-    await tx.update(projects).set({ workflowSchemeId: null }).where(eq(projects.workflowSchemeId, id))
+    await tx
+      .update(projects)
+      .set({ workflowSchemeId: null })
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.workflowSchemeId, id)))
     await tx
       .delete(workflowSchemes)
       .where(and(eq(workflowSchemes.workspaceId, workspaceId), eq(workflowSchemes.id, id)))

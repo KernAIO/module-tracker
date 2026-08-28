@@ -428,7 +428,7 @@ export class ProjectService {
       )
       .onConflictDoNothing({ target: [projectMembers.projectId, projectMembers.userId] })
       .returning()
-    await this.refreshMemberCount(tx, projectId)
+    await this.refreshMemberCount(tx, workspaceId, projectId)
     return rows.map(toProjectMember)
   }
 
@@ -463,7 +463,7 @@ export class ProjectService {
           eq(projectMembers.userId, userId),
         ),
       )
-    await this.refreshMemberCount(tx, projectId)
+    await this.refreshMemberCount(tx, workspaceId, projectId)
     await this.notify.change(workspaceId, 'project', projectId, 'updated')
   }
 
@@ -491,21 +491,21 @@ export class ProjectService {
     return toProjectMember(row)
   }
 
-  private async refreshMemberCount(tx: Tx, projectId: string): Promise<void> {
+  private async refreshMemberCount(tx: Tx, workspaceId: string, projectId: string): Promise<void> {
     await tx
       .update(projects)
       .set({
-        memberCount: sql`(select count(*) from ${projectMembers} where ${projectMembers.projectId} = ${projectId})`,
+        memberCount: sql`(select count(*) from ${projectMembers} where ${projectMembers.projectId} = ${projectId} and ${projectMembers.workspaceId} = ${workspaceId})`,
       })
-      .where(eq(projects.id, projectId))
+      .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, projectId)))
   }
 
   /** Members of a project, or the whole workspace when the project is workspace-visible. */
-  async memberIds(tx: Tx, projectId: string): Promise<string[]> {
+  async memberIds(tx: Tx, workspaceId: string, projectId: string): Promise<string[]> {
     const rows = await tx
       .select({ userId: projectMembers.userId })
       .from(projectMembers)
-      .where(eq(projectMembers.projectId, projectId))
+      .where(and(eq(projectMembers.workspaceId, workspaceId), eq(projectMembers.projectId, projectId)))
     return rows.map((r) => r.userId)
   }
 

@@ -183,7 +183,12 @@ const jobs: JobDef<Record<string, unknown>>[] = [
             tx
               .select({ userId: projectMembers.userId })
               .from(projectMembers)
-              .where(eq(projectMembers.projectId, cycle.projectId)),
+              .where(
+                and(
+                  eq(projectMembers.workspaceId, workspaceId),
+                  eq(projectMembers.projectId, cycle.projectId),
+                ),
+              ),
           )
           await svc.notify.notify({
             workspaceId,
@@ -238,7 +243,7 @@ const jobs: JobDef<Record<string, unknown>>[] = [
             await tx
               .update(issues)
               .set({ sla: { ...sla, breached: true } })
-              .where(eq(issues.id, row.id))
+              .where(and(eq(issues.workspaceId, workspaceId), eq(issues.id, row.id)))
           }
         })
       })
@@ -410,7 +415,7 @@ export const trackerModule = defineServerModule({
         requireService(principal)
         return {
           userIds: await kernel.database.withWorkspace(input.workspaceId, (tx) =>
-            trackerServices(kernel).projects.memberIds(tx, input.projectId),
+            trackerServices(kernel).projects.memberIds(tx, input.workspaceId, input.projectId),
           ),
         }
       },
@@ -634,7 +639,7 @@ export const trackerModule = defineServerModule({
             tx
               .select({ priority: issues.priority })
               .from(issues)
-              .where(eq(issues.id, payload.issueId!))
+              .where(and(eq(issues.workspaceId, ctx.workspaceId), eq(issues.id, payload.issueId!)))
               .limit(1),
           )
           return !!row && config.priorities.includes(row.priority)
