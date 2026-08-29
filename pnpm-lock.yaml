@@ -46,8 +46,8 @@ importers:
         specifier: ^0.1.0
         version: 0.1.1
       '@kernhq/ui':
-        specifier: ^0.12.5
-        version: 0.12.5(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
+        specifier: ^0.14.0
+        version: 0.14.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)
       '@tanstack/svelte-query':
         specifier: ^6.1.0
         version: 6.1.43(svelte@5.56.10)
@@ -807,9 +807,6 @@ packages:
   '@kernhq/contracts@0.7.0':
     resolution: {integrity: sha512-cp+dM+ScKi7hZ7hwsg+t9VpLoX8+oRnSfCydWJa6iQAtvjt+RBmgZNv67X9Du4b0I+AA24FpI6hyb2NTaMcLUw==}
 
-  '@kernhq/kernel@0.7.3':
-    resolution: {integrity: sha512-sU7EEHs3AKuJ1W2R1r9jEZtovWRa1HNKwk0DVguhKNaUmWwgubkZU6E8ulR2xpy227LCIWkPUF8g54COqHzHJA==}
-
   '@kernhq/kernel@0.9.1':
     resolution: {integrity: sha512-s5Q1vhUYxk0MwFLjSWODNzDVCgY+WjmHi4ZjMiFBsxSoxby4tUlGsGEBAabwn4fOS6UZEQ0D6GD58qKVnB2B2A==}
 
@@ -822,8 +819,8 @@ packages:
   '@kernhq/tsconfig@0.1.1':
     resolution: {integrity: sha512-dpsKywRORVpmPlvGBaBlzhhmsAJ8LY2MBj0T9fdo7mGVN7r6+DyYVs6yuLUc/YtV+Ll1riAGnQN/tpxKMb3vnA==}
 
-  '@kernhq/ui@0.12.5':
-    resolution: {integrity: sha512-W9eFyO1QQZPR6mtfovEgT+rz1YyEHahSy0AgXfhZJxZVvBLDpbvxGaVYaIoMUOzPuqaghRYt9w2BOkHleCsrZw==}
+  '@kernhq/ui@0.14.0':
+    resolution: {integrity: sha512-TBwMeafsIf/c5If6QhoLpDNQUYH95yfDp0WOIn04gko2w/AZ7vRBJ+i8/VK/URbiEUeYtReuSRk5d/mzPiNQ9g==}
     peerDependencies:
       '@tanstack/svelte-query': ^6.1.0
       svelte: ^5.46.0
@@ -3291,63 +3288,6 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@kernhq/kernel@0.7.3(@types/pg@8.23.1)':
-    dependencies:
-      '@aws-sdk/client-s3': 3.1115.0
-      '@aws-sdk/s3-request-presigner': 3.1115.0
-      '@fastify/cors': 11.3.0
-      '@fastify/helmet': 13.1.1
-      '@fastify/rate-limit': 10.3.0
-      '@kernhq/contracts': 0.7.0
-      '@orpc/contract': 1.15.0
-      '@orpc/openapi': 1.15.0(fastify@5.12.1)
-      '@orpc/server': 1.15.0(fastify@5.12.1)
-      '@orpc/zod': 1.15.0(@orpc/contract@1.15.0)(@orpc/server@1.15.0(fastify@5.12.1))(fastify@5.12.1)(zod@4.4.3)
-      drizzle-orm: 0.45.2(@types/pg@8.23.1)(pg@8.23.0)
-      fastify: 5.12.1
-      ioredis: 6.0.0
-      jose: 6.2.10
-      nats: 2.29.3
-      pg: 8.23.0
-      pg-boss: 12.28.0
-      pino: 10.3.1
-      pino-pretty: 13.1.3
-      semver: 7.8.5
-      zod: 4.4.3
-    transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@opentelemetry/api'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
-      - better-sqlite3
-      - bun-types
-      - crossws
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
-      - pg-native
-      - postgres
-      - prisma
-      - sql.js
-      - sqlite3
-      - supports-color
-      - ws
-
   '@kernhq/kernel@0.9.1(@types/pg@8.23.1)':
     dependencies:
       '@aws-sdk/client-s3': 3.1115.0
@@ -3425,11 +3365,11 @@ snapshots:
 
   '@kernhq/tsconfig@0.1.1': {}
 
-  '@kernhq/ui@0.12.5(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
+  '@kernhq/ui@0.14.0(@floating-ui/dom@1.8.0)(@internationalized/date@3.12.3)(@tanstack/svelte-query@6.1.43(svelte@5.56.10))(@tiptap/extension-text-style@3.30.5(@tiptap/core@3.30.5(@tiptap/pm@3.30.5)))(@types/pg@8.23.1)(prosemirror-model@1.25.11)(prosemirror-state@1.4.4)(prosemirror-view@1.42.3)(svelte@5.56.10)':
     dependencies:
       '@hocuspocus/provider': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@kernhq/contracts': 0.7.0
-      '@kernhq/kernel': 0.7.3(@types/pg@8.23.1)
+      '@kernhq/kernel': 0.9.1(@types/pg@8.23.1)
       '@kernhq/sdk': 0.1.9
       '@lucide/svelte': 1.34.0(svelte@5.56.10)
       '@tanstack/svelte-query': 6.1.43(svelte@5.56.10)
