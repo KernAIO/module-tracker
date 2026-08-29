@@ -1,5 +1,14 @@
 # @kernhq/module-tracker
 
+## 0.11.11
+
+### Patch Changes
+
+- f0fbb49: Mount the project pages the sidebar already links to: /tracker/projects/:key
+  and /tracker/projects/:key/:section. The screens moved into this package
+  without their routes, so Components, Milestones, Cycles and Templates were
+  reachable only as 404s.
+
 ## 0.11.10
 
 ### Patch Changes
