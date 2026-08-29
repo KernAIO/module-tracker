@@ -43,6 +43,26 @@ export const trackerClientModule = defineClientModule({
       permission: TRACKER_PERMISSIONS.view,
     },
     {
+      // One project, one page per concern: /tracker/projects/KRN (sections default to components),
+      // .../KRN/components, .../KRN/milestones, .../KRN/cycles and .../KRN/templates. ProjectPage
+      // picks the screen from the section; the sidebar's project rows move between them. The key is
+      // the project's `key` (`KRN`), which is what the URL carries and what the pages look up.
+      path: '/tracker/projects/:key',
+      component: () => import('./pages/ProjectPage.svelte'),
+      get title() {
+        return t('title')
+      },
+      permission: TRACKER_PERMISSIONS.view,
+    },
+    {
+      path: '/tracker/projects/:key/:section',
+      component: () => import('./pages/ProjectPage.svelte'),
+      get title() {
+        return t('title')
+      },
+      permission: TRACKER_PERMISSIONS.view,
+    },
+    {
       path: '/tracker',
       component: () => import('./pages/IssuesPage.svelte'),
       get title() {
