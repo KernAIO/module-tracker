@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.12
+
+### Patch Changes
+
+- chore: refresh the lockfile for the raised @kernhq/ui range
+
 ## 0.11.11
 
 ### Patch Changes
