@@ -92,3 +92,25 @@ jobs:
           npm config set "//registry.npmjs.org/:_authToken=$NPM_TOKEN"
           pnpm changeset publish
           git push origin "HEAD:${GITHUB_REF_NAME}" --follow-tags
+
+      # The tag exists the moment this run ends (vX.Y.Z, pushed by --follow-tags), but a tag is
+      # not something a watcher can read. Turn the version into a GitHub release whose body is
+      # the section `changeset version` just wrote into CHANGELOG.md — the changelog ships with
+      # the version, on the Releases tab, instead of only living at the top of a file nobody
+      # thinks to open. Idempotent: a tag that already has a release is left alone.
+      - name: Publish the changelog as a GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — nothing to announce."
+            exit 0
+          fi
+          # The newest `## <version>` heading is the section for the version just published.
+          BODY=$(awk -v ver="$VERSION" 'BEGIN { p=0 } /^## / { if (p) exit; p = ($0 == "## " ver) } p' CHANGELOG.md)
+          [ -n "$BODY" ] || BODY="Version $VERSION — see the commits for what changed."
+          gh release create "$TAG" --title "$TAG" --notes "$BODY"
