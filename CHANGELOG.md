@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.13
+
+### Patch Changes
+
+- test: pin the tracker permission matrix against a blessed table
+
 ## 0.11.12
 
 ### Patch Changes
