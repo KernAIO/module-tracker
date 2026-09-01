@@ -263,3 +263,9 @@ Integration tests create their own scratch database from `DATABASE_URL` (default
 `postgres://kern:kern@localhost:5432/kern`) and drop it afterwards. After regenerating the schema,
 re-generate the RLS migration for any new tenant table — it is derived from `TENANT_TABLES` with
 `rlsPolicySql`, and generated Drizzle SQL never contains RLS.
+
+`src/contract/permissions.test.ts` pins the permission matrix: which built-in role holds which
+tracker permission by default, with the kernel's guest ⊆ member ⊆ admin ⊆ owner cascade already
+applied. Change a `defaultRoles` entry in `src/contract/permissions.ts` and the test fails, naming
+every row that moved. Confirm the change is intended, then update the `BLESSED` table in the same
+commit. The helpers come from `@kernhq/testing`, so other modules can copy the pattern.
