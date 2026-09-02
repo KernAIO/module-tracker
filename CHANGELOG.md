@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.11.14
+
+### Patch Changes
+
+- fix(i18n): translate the last still-English strings (de, ar, tr)
+
 ## 0.11.13
 
 ### Patch Changes
