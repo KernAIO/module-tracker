@@ -76,10 +76,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.issues',
       get title() {
-        return t('common.widget_issues_title')
+        return t('widget_issues_title')
       },
       get description() {
-        return t('common.widget_issues_desc')
+        return t('widget_issues_desc')
       },
       icon: 'square-check-big',
       permission: TRACKER_PERMISSIONS.view,
@@ -104,7 +104,7 @@ export const trackerClientModule = defineClientModule({
               { value: 'backlog', label: t('preset_backlog') },
               { value: 'created', label: t('preset_created') },
               { value: 'subscribed', label: t('preset_subscribed') },
-              { value: 'triage', label: t('common.widget_preset_triage') },
+              { value: 'triage', label: t('widget_preset_triage') },
             ]
           },
         },
@@ -112,12 +112,12 @@ export const trackerClientModule = defineClientModule({
           kind: 'select',
           key: 'view',
           get label() {
-            return t('common.widget_setting_saved_view')
+            return t('widget_setting_saved_view')
           },
           default: null,
           nullable: true,
           get nullLabel() {
-            return t('common.widget_setting_no_view')
+            return t('widget_setting_no_view')
           },
           loadOptions: async (ctx) => {
             const { getTrackerApi } = await import('./api-instance.js')
@@ -141,10 +141,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.stat-assigned',
       get title() {
-        return t('common.widget_assigned_title')
+        return t('widget_assigned_title')
       },
       get description() {
-        return t('common.widget_assigned_desc')
+        return t('widget_assigned_desc')
       },
       icon: 'square-check-big',
       permission: TRACKER_PERMISSIONS.view,
@@ -157,10 +157,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.stat-due-soon',
       get title() {
-        return t('common.widget_due_soon_title')
+        return t('widget_due_soon_title')
       },
       get description() {
-        return t('common.widget_due_soon_desc')
+        return t('widget_due_soon_desc')
       },
       icon: 'clock',
       permission: TRACKER_PERMISSIONS.view,
@@ -173,10 +173,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.cycle-progress',
       get title() {
-        return t('common.widget_cycle_title')
+        return t('widget_cycle_title')
       },
       get description() {
-        return t('common.widget_cycle_desc')
+        return t('widget_cycle_desc')
       },
       icon: 'gauge',
       permission: TRACKER_PERMISSIONS.view,
@@ -188,7 +188,7 @@ export const trackerClientModule = defineClientModule({
           kind: 'select',
           key: 'project',
           get label() {
-            return t('common.widget_setting_project')
+            return t('widget_setting_project')
           },
           default: null,
           nullable: true,
@@ -207,10 +207,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.velocity',
       get title() {
-        return t('common.widget_velocity_title')
+        return t('widget_velocity_title')
       },
       get description() {
-        return t('common.widget_velocity_desc')
+        return t('widget_velocity_desc')
       },
       icon: 'chart-column',
       permission: TRACKER_PERMISSIONS.view,
@@ -223,7 +223,7 @@ export const trackerClientModule = defineClientModule({
           kind: 'select',
           key: 'project',
           get label() {
-            return t('common.widget_setting_project')
+            return t('widget_setting_project')
           },
           default: null,
           nullable: true,
@@ -240,7 +240,7 @@ export const trackerClientModule = defineClientModule({
           kind: 'number',
           key: 'lastN',
           get label() {
-            return t('common.widget_velocity_cycles')
+            return t('widget_velocity_cycles')
           },
           default: 6,
           min: 3,
@@ -252,10 +252,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.created-vs-resolved',
       get title() {
-        return t('common.widget_throughput_title')
+        return t('widget_throughput_title')
       },
       get description() {
-        return t('common.widget_throughput_desc')
+        return t('widget_throughput_desc')
       },
       icon: 'chart-line',
       permission: TRACKER_PERMISSIONS.view,
@@ -267,7 +267,7 @@ export const trackerClientModule = defineClientModule({
           kind: 'select',
           key: 'project',
           get label() {
-            return t('common.widget_setting_project')
+            return t('widget_setting_project')
           },
           default: null,
           nullable: true,
@@ -284,14 +284,14 @@ export const trackerClientModule = defineClientModule({
           kind: 'select',
           key: 'range',
           get label() {
-            return t('common.widget_setting_range')
+            return t('widget_setting_range')
           },
           default: '30',
           get options() {
             return [
-              { value: '14', label: t('common.widget_range_14') },
-              { value: '30', label: t('common.widget_range_30') },
-              { value: '90', label: t('common.widget_range_90') },
+              { value: '14', label: t('widget_range_14') },
+              { value: '30', label: t('widget_range_30') },
+              { value: '90', label: t('widget_range_90') },
             ]
           },
         },
@@ -301,10 +301,10 @@ export const trackerClientModule = defineClientModule({
     {
       id: 'tracker.timer',
       get title() {
-        return t('common.widget_timer_title')
+        return t('widget_timer_title')
       },
       get description() {
-        return t('common.widget_timer_desc')
+        return t('widget_timer_desc')
       },
       icon: 'timer',
       permission: TRACKER_PERMISSIONS.view,
