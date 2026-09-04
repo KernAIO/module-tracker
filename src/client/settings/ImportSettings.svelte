@@ -53,6 +53,7 @@ const DESTINATIONS = [
 
 let selectedProject = $state<string | null>(null)
 let file = $state<File | null>(null)
+let fileInput = $state<HTMLInputElement | null>(null)
 let preview = $state<{ columns: string[]; rows: string[][] }>({ columns: [], rows: [] })
 let mapping = $state<Record<string, string>>({})
 let hasHeader = $state(true)
@@ -178,15 +179,27 @@ const canStart = $derived(Boolean(file) && mappedTitle && canManage && !running)
     </SettingsSection>
 
     <SettingsSection title={t('import_file')} description={t('import_file_hint')}>
-      <input
-        type="file"
-        accept=".csv,text/csv"
-        aria-label={t('import_file')}
-        data-testid="import-file"
-        onchange={(e) => {
-          void chooseFile(e.currentTarget.files)
-        }}
-      />
+      <!-- The native file control cannot be styled and read as "Choose File  No file chosen" in
+           the browser's own font; the input stays for the browser and the tests, the button is
+           what people see. -->
+      <div class="pick">
+        <input
+          bind:this={fileInput}
+          class="sr-only"
+          type="file"
+          accept=".csv,text/csv"
+          aria-label={t('import_file')}
+          data-testid="import-file"
+          tabindex="-1"
+          onchange={(e) => {
+            void chooseFile(e.currentTarget.files)
+          }}
+        />
+        <Button variant="secondary" icon="upload" onclick={() => fileInput?.click()}>
+          {file ? t('import_choose_another') : t('import_choose')}
+        </Button>
+        <span class="picked">{file ? file.name : t('import_no_file')}</span>
+      </div>
       <label class="check">
         <input
           type="checkbox"
@@ -339,6 +352,19 @@ const canStart = $derived(Boolean(file) && mappedTitle && canManage && !running)
   place-items: center;
   padding: 24px;
   font-size: 13px;
+}
+.pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.picked {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--kern-ink-550);
 }
 .check {
   display: flex;
