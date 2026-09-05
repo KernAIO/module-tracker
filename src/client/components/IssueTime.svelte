@@ -167,7 +167,16 @@ const who = (userId: string) =>
     </div>
   {/if}
 
-  {#if worklogs.length}
+  <!-- Before the list and its empty line: "No time logged yet" for a list that failed is what
+       makes somebody log the same hour twice. -->
+  {#if worklogsQuery.isError}
+    <div class="failed">
+      <span>{t('error_title')}</span>
+      <Button size="xs" variant="ghost" onclick={() => void worklogsQuery.refetch()}>
+        {t('common.retry')}
+      </Button>
+    </div>
+  {:else if worklogs.length}
     <ul class="logs">
       {#each worklogs as entry (entry.id)}
         <li>
@@ -302,5 +311,13 @@ time {
   margin: 6px 0 0;
   font-size: 13px;
   color: var(--kern-ink-350);
+}
+.failed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--kern-ink-600);
 }
 </style>

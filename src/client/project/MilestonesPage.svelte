@@ -172,6 +172,8 @@ const menuFor = (milestone: Milestone): MenuItem[] => [
 <ProjectShell
   project={at.project}
   pending={at.pending}
+  failed={at.failed}
+  onretry={at.retry}
   {slug}
   projectKey={at.projectKey}
   title={t('planning_milestones')}
@@ -188,6 +190,14 @@ const menuFor = (milestone: Milestone): MenuItem[] => [
   {#snippet children()}
     {#if milestonesQuery.isPending}
       <p class="quiet">{t('common.loading')}</p>
+    {:else if milestonesQuery.isError}
+      <EmptyState icon="triangle-alert" title={t('error_title')}>
+        {#snippet actions()}
+          <Button size="sm" variant="secondary" onclick={() => void milestonesQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        {/snippet}
+      </EmptyState>
     {:else if !milestones.length}
       <EmptyState
         icon="flag"

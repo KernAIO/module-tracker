@@ -1,7 +1,8 @@
 <script lang="ts">
-import { formatCount, StatTile } from '@kernhq/ui'
+import { Button, formatCount, StatTile } from '@kernhq/ui'
 import { createQuery } from '@tanstack/svelte-query'
 import { getTrackerApi } from '../api-instance.js'
+import { t } from '../i18n.js'
 
 /**
  * One number from one KQL query.
@@ -32,13 +33,22 @@ const query = createQuery(() => ({
 </script>
 
 <div class="wrap">
-  <StatTile
-    {label}
-    value={query.isPending ? '—' : formatCount(query.data?.total ?? 0)}
-    {href}
-    size="md"
-    class="tile"
-  />
+  <!-- A failed count is not a count of nothing: `data ?? 0` used to render a confident "0" on a
+       dashboard for a query that never came back. -->
+  {#if query.isError}
+    <div class="failed">
+      <p>{t('common.error')}</p>
+      <Button size="xs" variant="ghost" onclick={() => void query.refetch()}>{t('common.retry')}</Button>
+    </div>
+  {:else}
+    <StatTile
+      {label}
+      value={query.isPending ? '—' : formatCount(query.data?.total ?? 0)}
+      {href}
+      size="md"
+      class="tile"
+    />
+  {/if}
 </div>
 
 <style>
@@ -52,5 +62,15 @@ const query = createQuery(() => ({
     border: 0;
     background: transparent;
     padding: 0;
+  }
+  .failed {
+    display: grid;
+    justify-items: start;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--kern-ink-600);
+  }
+  .failed p {
+    margin: 0;
   }
 </style>

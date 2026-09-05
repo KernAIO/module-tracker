@@ -122,6 +122,15 @@ const when = (iso: string | null) => (iso ? iso.slice(0, 16).replace('T', ' ') :
 <SettingsPage title={t('settings_repeating')} description={t('settings_repeating_hint')}>
   {#if projectsQuery.isPending}
     <SettingsSection><div class="state"><Spinner /></div></SettingsSection>
+  {:else if projectsQuery.isError}
+    <SettingsSection>
+      <div class="state">
+        <p>{t('projects_failed')}</p>
+        <Button size="sm" variant="ghost" onclick={() => void projectsQuery.refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    </SettingsSection>
   {:else if !projects.length}
     <SettingsSection><p class="state">{t('settings_planning_no_projects')}</p></SettingsSection>
   {:else}
@@ -136,6 +145,13 @@ const when = (iso: string | null) => (iso ? iso.slice(0, 16).replace('T', ' ') :
     <SettingsSection title={t('repeat_title')} description={t('repeat_hint')}>
       {#if recurringQuery.isPending}
         <div class="state"><Spinner /></div>
+      {:else if recurringQuery.isError}
+        <div class="state">
+          <p>{t('error_title')}</p>
+          <Button size="sm" variant="ghost" onclick={() => void recurringQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
       {:else}
         <ul class="rows" data-testid="recurring-list">
           {#each recurringQuery.data ?? [] as entry (entry.id)}
@@ -199,6 +215,13 @@ const when = (iso: string | null) => (iso ? iso.slice(0, 16).replace('T', ' ') :
     <SettingsSection title={t('template_title')} description={t('template_hint')}>
       {#if templatesQuery.isPending}
         <div class="state"><Spinner /></div>
+      {:else if templatesQuery.isError}
+        <div class="state">
+          <p>{t('error_title')}</p>
+          <Button size="sm" variant="ghost" onclick={() => void templatesQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        </div>
       {:else}
         <ul class="rows" data-testid="template-list">
           {#each templatesQuery.data ?? [] as template (template.id)}
@@ -235,6 +258,7 @@ const when = (iso: string | null) => (iso ? iso.slice(0, 16).replace('T', ' ') :
 .state {
   display: grid;
   place-items: center;
+  gap: 8px;
   padding: 24px;
   font-size: 13px;
 }

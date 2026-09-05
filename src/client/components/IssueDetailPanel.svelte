@@ -871,6 +871,15 @@ function describeEvent(action: string, changes: Array<{ field: string; to: unkno
               </li>
             {/each}
           </ul>
+        {:else if attachmentsQuery.isError}
+          <!-- "No files yet" for a list that failed is how somebody concludes their attachment
+               never uploaded. -->
+          <div class="failed">
+            <span>{t('error_title')}</span>
+            <Button size="xs" variant="ghost" onclick={() => void attachmentsQuery.refetch()}>
+              {t('common.retry')}
+            </Button>
+          </div>
         {:else}
           <p class="empty">{t('attachments_empty')}</p>
         {/if}
@@ -1078,6 +1087,14 @@ function describeEvent(action: string, changes: Array<{ field: string; to: unkno
     margin: 6px 0 0;
     font-size: 13px;
     color: var(--kern-ink-350);
+  }
+  .failed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0 0;
+    font-size: 13px;
+    color: var(--kern-ink-600);
   }
   .loading {
     display: grid;

@@ -143,6 +143,15 @@ const leadOptions = $derived([
 <SettingsPage title={t('settings_projects')} description={t('settings_projects_hint')}>
   {#if projectsQuery.isPending}
     <SettingsSection><div class="state"><Spinner /></div></SettingsSection>
+  {:else if projectsQuery.isError}
+    <SettingsSection>
+      <div class="state">
+        <p>{t('projects_failed')}</p>
+        <Button size="sm" variant="ghost" onclick={() => void projectsQuery.refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    </SettingsSection>
   {:else if !projects.length}
     <SettingsSection>
       <p class="state">{t('settings_planning_no_projects')}</p>
@@ -374,6 +383,7 @@ const leadOptions = $derived([
 .state {
   display: grid;
   place-items: center;
+  gap: 8px;
   padding: 24px;
   font-size: 13px;
 }

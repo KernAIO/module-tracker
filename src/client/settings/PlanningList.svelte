@@ -23,6 +23,9 @@ interface Props {
   description: string
   items: PlanningItem[]
   loading?: boolean
+  /** the list did not arrive — told apart from a project that has none of these yet */
+  failed?: boolean
+  onretry?: () => void
   editable: boolean
   addLabel: string
   emptyLabel: string
@@ -38,6 +41,8 @@ let {
   description,
   items,
   loading = false,
+  failed = false,
+  onretry,
   editable,
   addLabel,
   emptyLabel,
@@ -84,6 +89,15 @@ const commitEdit = () => {
 
   {#if loading}
     <div class="state"><Spinner /></div>
+  {:else if failed}
+    <!-- Before the empty check and before the editable one: a failed list must not offer an add
+         box that implies the project has none of these. -->
+    <div class="state failed">
+      <p>{t('error_title')}</p>
+      {#if onretry}
+        <Button size="sm" variant="ghost" onclick={onretry}>{t('common.retry')}</Button>
+      {/if}
+    </div>
   {:else if !items.length && !editable}
     <p class="empty">{emptyLabel}</p>
   {:else}
@@ -253,5 +267,13 @@ li {
   display: grid;
   place-items: center;
   padding: 18px;
+}
+.failed {
+  gap: 8px;
+  font-size: 13px;
+  color: var(--kern-ink-600);
+}
+.failed p {
+  margin: 0;
 }
 </style>

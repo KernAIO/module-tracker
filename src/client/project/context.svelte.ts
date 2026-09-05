@@ -18,6 +18,14 @@ export interface RouteProject {
   readonly project: Project | null
   readonly projectId: string
   readonly pending: boolean
+  /**
+   * The list did not arrive.
+   *
+   * Without this a failed `projects.list` is indistinguishable from a project that is not there,
+   * and every one of a project's pages says "No project called KERN" for a project that exists.
+   */
+  readonly failed: boolean
+  readonly retry: () => void
 }
 
 export function useRouteProject(): RouteProject {
@@ -53,6 +61,12 @@ export function useRouteProject(): RouteProject {
     },
     get pending() {
       return projectsQuery.isPending
+    },
+    get failed() {
+      return projectsQuery.isError
+    },
+    retry: () => {
+      void projectsQuery.refetch()
     },
   }
 }

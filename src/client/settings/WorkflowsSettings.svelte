@@ -246,6 +246,15 @@ const from = (rule: { from: string | string[] }) =>
 <SettingsPage title={t('settings_workflows')} description={t('settings_workflows_hint')}>
   {#if workflowsQuery.isPending}
     <SettingsSection><div class="state"><Spinner /></div></SettingsSection>
+  {:else if workflowsQuery.isError}
+    <SettingsSection>
+      <div class="state">
+        <p>{t('error_title')}</p>
+        <Button size="sm" variant="ghost" onclick={() => void workflowsQuery.refetch()}>
+          {t('common.retry')}
+        </Button>
+      </div>
+    </SettingsSection>
   {:else if !workflows.length}
     <SettingsSection><p class="state">{t('settings_workflows_empty')}</p></SettingsSection>
   {:else}
@@ -543,6 +552,7 @@ const from = (rule: { from: string | string[] }) =>
 .state {
   display: grid;
   place-items: center;
+  gap: 8px;
   padding: 26px;
   font-size: 13px;
 }

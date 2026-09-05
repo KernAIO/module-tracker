@@ -1,5 +1,5 @@
 <script lang="ts">
-import { EmptyState, PageHeader, Skeleton, session } from '@kernhq/ui'
+import { Button, EmptyState, PageHeader, Skeleton, session } from '@kernhq/ui'
 import type { Snippet } from 'svelte'
 import { t } from '../i18n.js'
 import type { Project } from '../index.js'
@@ -16,6 +16,15 @@ import { projectTargets, trackerHref } from '../nav.js'
 interface Props {
   project: Project | null
   pending: boolean
+  /**
+   * The project list did not arrive.
+   *
+   * Kept apart from `project === null` on purpose: a request that never came back knows nothing
+   * about whether the project exists, and saying "No project called KERN" for one that does is
+   * how somebody concludes their work was deleted.
+   */
+  failed?: boolean
+  onretry?: () => void
   slug: string
   /** what the URL asked for, so a stale link can say what it was looking for */
   projectKey: string
@@ -27,7 +36,18 @@ interface Props {
   headerActions?: Snippet
   children: Snippet
 }
-let { project, pending, slug, projectKey, title, subtitle = null, headerActions, children }: Props = $props()
+let {
+  project,
+  pending,
+  failed = false,
+  onretry,
+  slug,
+  projectKey,
+  title,
+  subtitle = null,
+  headerActions,
+  children,
+}: Props = $props()
 
 const workspaceName = $derived(session.workspaces.find((w) => w.slug === slug)?.name ?? '')
 </script>
@@ -56,6 +76,14 @@ const workspaceName = $derived(session.workspaces.find((w) => w.slug === slug)?.
       <div class="load">
         {#each [1, 2, 3] as row (row)}<Skeleton class="h-[76px] w-full" />{/each}
       </div>
+    {:else if failed}
+      <EmptyState icon="triangle-alert" title={t('error_title')} description={t('projects_failed')}>
+        {#snippet actions()}
+          {#if onretry}
+            <Button size="sm" variant="secondary" onclick={onretry}>{t('common.retry')}</Button>
+          {/if}
+        {/snippet}
+      </EmptyState>
     {:else if !project}
       <EmptyState
         icon="folder"

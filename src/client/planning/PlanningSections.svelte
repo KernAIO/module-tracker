@@ -175,6 +175,8 @@ const releasedIds = $derived(
   <CycleList
     cycles={cyclesQuery.data ?? []}
     loading={cyclesQuery.isPending}
+    failed={cyclesQuery.isError}
+    onretry={() => void cyclesQuery.refetch()}
     {editable}
     oncreate={(input) => addCycle.mutate(input)}
     onupdate={(input) => updateCycle.mutate(input)}
@@ -190,6 +192,8 @@ const releasedIds = $derived(
     description={t('planning_milestones_hint')}
     items={milestones}
     loading={milestonesQuery.isPending}
+    failed={milestonesQuery.isError}
+    onretry={() => void milestonesQuery.refetch()}
     {editable}
     addLabel={t('planning_milestone_add')}
     emptyLabel={t('planning_milestones_empty')}
@@ -214,6 +218,8 @@ const releasedIds = $derived(
     description={t('planning_components_hint')}
     items={components}
     loading={componentsQuery.isPending}
+    failed={componentsQuery.isError}
+    onretry={() => void componentsQuery.refetch()}
     {editable}
     addLabel={t('planning_component_add')}
     emptyLabel={t('planning_components_empty')}
@@ -229,6 +235,8 @@ const releasedIds = $derived(
     description={t('planning_versions_hint')}
     items={versions}
     loading={versionsQuery.isPending}
+    failed={versionsQuery.isError}
+    onretry={() => void versionsQuery.refetch()}
     {editable}
     addLabel={t('planning_version_add')}
     emptyLabel={t('planning_versions_empty')}
@@ -249,6 +257,8 @@ const releasedIds = $derived(
     description={t('planning_labels_hint')}
     items={labels}
     loading={labelsQuery.isPending}
+    failed={labelsQuery.isError}
+    onretry={() => void labelsQuery.refetch()}
     {editable}
     addLabel={t('planning_label_add')}
     emptyLabel={t('planning_labels_empty')}

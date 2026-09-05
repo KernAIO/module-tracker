@@ -1,5 +1,6 @@
 <script lang="ts">
 import {
+  Button,
   DropdownMenu,
   formatCount,
   IconButton,
@@ -186,6 +187,15 @@ const menuFor = (project: Project): MenuItem[] => [
     <div class="loading">
       {#each [1, 2, 3] as row (row)}<Skeleton class="h-[26px] w-full" />{/each}
     </div>
+  {:else if projectsQuery.isError}
+    <!-- Not `projects_empty_hint`: the sidebar is on every screen, so telling somebody with a
+         dozen projects to "make the first one" is the whole product looking empty at once. -->
+    <div class="failed">
+      <p>{t('projects_failed')}</p>
+      <Button size="xs" variant="ghost" onclick={() => void projectsQuery.refetch()}>
+        {t('common.retry')}
+      </Button>
+    </div>
   {:else if !projects.length}
     <p class="none">{t('projects_empty_hint')}</p>
   {:else}
@@ -253,6 +263,17 @@ const menuFor = (project: Project): MenuItem[] => [
   margin: 2px 10px 6px;
   font-size: 12.5px;
   color: var(--kern-ink-330);
+}
+.failed {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin: 2px 10px 6px;
+  font-size: 12.5px;
+  color: var(--kern-ink-600);
+}
+.failed p {
+  margin: 0;
 }
 .loading {
   display: flex;

@@ -226,6 +226,8 @@ const menuFor = (cycle: Cycle): MenuItem[] => [
 <ProjectShell
   project={at.project}
   pending={at.pending}
+  failed={at.failed}
+  onretry={at.retry}
   {slug}
   projectKey={at.projectKey}
   title={t('planning_cycles')}
@@ -242,6 +244,14 @@ const menuFor = (cycle: Cycle): MenuItem[] => [
   {#snippet children()}
     {#if cyclesQuery.isPending}
       <p class="quiet">{t('common.loading')}</p>
+    {:else if cyclesQuery.isError}
+      <EmptyState icon="triangle-alert" title={t('error_title')}>
+        {#snippet actions()}
+          <Button size="sm" variant="secondary" onclick={() => void cyclesQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        {/snippet}
+      </EmptyState>
     {:else if !cycles.length}
       <EmptyState
         icon="refresh-cw"

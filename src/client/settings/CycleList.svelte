@@ -17,6 +17,9 @@ import type { Cycle } from '../index.js'
 interface Props {
   cycles: Cycle[]
   loading?: boolean
+  /** the list did not arrive — told apart from a project that has no cycles */
+  failed?: boolean
+  onretry?: () => void
   editable: boolean
   busy?: boolean
   oncreate: (input: { name: string; startAt: string; endAt: string }) => void
@@ -28,6 +31,8 @@ interface Props {
 let {
   cycles,
   loading = false,
+  failed = false,
+  onretry,
   editable,
   busy = false,
   oncreate,
@@ -133,6 +138,13 @@ const statusLabel = (status: Cycle['status']) =>
 
   {#if loading}
     <div class="state"><Spinner /></div>
+  {:else if failed}
+    <div class="state failed">
+      <p>{t('error_title')}</p>
+      {#if onretry}
+        <Button size="sm" variant="ghost" onclick={onretry}>{t('common.retry')}</Button>
+      {/if}
+    </div>
   {:else}
     <ul>
       {#each cycles as cycle (cycle.id)}
@@ -423,5 +435,13 @@ li {
   display: grid;
   place-items: center;
   padding: 18px;
+}
+.failed {
+  gap: 8px;
+  font-size: 13px;
+  color: var(--kern-ink-600);
+}
+.failed p {
+  margin: 0;
 }
 </style>

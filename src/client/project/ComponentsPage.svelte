@@ -165,6 +165,8 @@ const menuFor = (component: Component): MenuItem[] => [
 <ProjectShell
   project={at.project}
   pending={at.pending}
+  failed={at.failed}
+  onretry={at.retry}
   {slug}
   projectKey={at.projectKey}
   title={t('planning_components')}
@@ -181,6 +183,14 @@ const menuFor = (component: Component): MenuItem[] => [
   {#snippet children()}
     {#if componentsQuery.isPending}
       <p class="quiet">{t('common.loading')}</p>
+    {:else if componentsQuery.isError}
+      <EmptyState icon="triangle-alert" title={t('error_title')}>
+        {#snippet actions()}
+          <Button size="sm" variant="secondary" onclick={() => void componentsQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        {/snippet}
+      </EmptyState>
     {:else if !components.length}
       <EmptyState
         icon="puzzle"

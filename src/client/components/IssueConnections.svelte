@@ -1,5 +1,5 @@
 <script lang="ts">
-import { DropdownMenu, Icon, IconButton, type MenuItem, toast } from '@kernhq/ui'
+import { Button, DropdownMenu, Icon, IconButton, type MenuItem, toast } from '@kernhq/ui'
 import { createMutation, createQuery, useQueryClient } from '@tanstack/svelte-query'
 import { getTrackerApi } from '../api-instance.js'
 import { t } from '../i18n.js'
@@ -158,6 +158,18 @@ const relationGroups = $derived.by(() => {
 const isHttp = $derived(/^https?:\/\/\S+$/i.test(linkUrl.trim()))
 </script>
 
+<!--
+  Three lists that each say "nothing yet" when they are empty, so each has to say something else
+  when it failed: "Nothing related yet" on an issue that blocks four others is a wrong answer, not
+  a missing one.
+-->
+{#snippet failedLine(retry: () => void)}
+  <div class="failed">
+    <span>{t('error_title')}</span>
+    <Button size="xs" variant="ghost" onclick={retry}>{t('common.retry')}</Button>
+  </div>
+{/snippet}
+
 {#snippet issueLine(
   key: string,
   title: string,
@@ -201,7 +213,9 @@ const isHttp = $derived(/^https?:\/\/\S+$/i.test(linkUrl.trim()))
         oncancel={() => (adding = null)}
       />
     {/if}
-    {#if children.length}
+    {#if childrenQuery.isError}
+      {@render failedLine(() => void childrenQuery.refetch())}
+    {:else if children.length}
       <ul>
         {#each children as child (child.id)}
           {@render issueLine(child.key, child.title, child.statusId, child.statusCategory, () =>
@@ -236,7 +250,9 @@ const isHttp = $derived(/^https?:\/\/\S+$/i.test(linkUrl.trim()))
         oncancel={() => (adding = null)}
       />
     {/if}
-    {#if relationGroups.length}
+    {#if relationsQuery.isError}
+      {@render failedLine(() => void relationsQuery.refetch())}
+    {:else if relationGroups.length}
       {#each relationGroups as [type, group] (type)}
         <p class="gname">{RELATION_LABELS[type]()}</p>
         <ul>
@@ -291,7 +307,9 @@ const isHttp = $derived(/^https?:\/\/\S+$/i.test(linkUrl.trim()))
         </div>
       </form>
     {/if}
-    {#if links.length}
+    {#if linksQuery.isError}
+      {@render failedLine(() => void linksQuery.refetch())}
+    {:else if links.length}
       <ul>
         {#each links as link (link.id)}
           <li>
@@ -382,6 +400,14 @@ li {
   margin: 4px 0 0;
   font-size: 13px;
   color: var(--kern-ink-350);
+}
+.failed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--kern-ink-600);
 }
 .linkform {
   display: flex;

@@ -121,6 +121,8 @@ const newIssueHref = $derived(
 <ProjectShell
   project={at.project}
   pending={at.pending}
+  failed={at.failed}
+  onretry={at.retry}
   {slug}
   projectKey={at.projectKey}
   title={t('template_title')}
@@ -137,6 +139,14 @@ const newIssueHref = $derived(
   {#snippet children()}
     {#if templatesQuery.isPending}
       <p class="quiet">{t('common.loading')}</p>
+    {:else if templatesQuery.isError}
+      <EmptyState icon="triangle-alert" title={t('error_title')}>
+        {#snippet actions()}
+          <Button size="sm" variant="secondary" onclick={() => void templatesQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        {/snippet}
+      </EmptyState>
     {:else if !templates.length}
       <EmptyState icon="copy" title={t('template_empty')} description={t('template_hint')}>
         {#snippet actions()}
