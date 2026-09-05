@@ -1,5 +1,39 @@
 # @kernhq/module-tracker
 
+## 0.12.0
+
+### Minor Changes
+
+- 247551b: The workflow "Call webhook" post-function can no longer be pointed at the network the service runs
+  on. It sent a request to whatever URL a workspace admin typed, so on a hosted instance — where
+  signing up makes you the owner of a workspace — it could be aimed at the other services on the
+  internal network or at the cloud provider's metadata endpoint, with a method, headers and a body of
+  the caller's choosing.
+
+  A webhook now has to be http or https, its hostname is resolved before anything connects and refused
+  if it lands on a loopback, private, link-local, unique-local, multicast or reserved address, and the
+  socket goes to the address that was checked rather than to a second lookup that could answer
+  differently. Redirects are no longer followed, because the address a redirect names is one nothing
+  has checked. Responses are capped and the call times out.
+
+  Anyone whose workflow calls a webhook on their own internal network will see it refused, with the
+  address and the reason in the service log.
+
+### Patch Changes
+
+- 94f4b45: The Reports page says when something failed to load instead of reporting nothing. A failed project
+  list used to read "There are no projects to report on yet", and a failed report drew its heading and
+  then an empty panel; both now show the failure with a Retry.
+- 1f93ac3: The last two places in the tracker that answered a failed request with "there is nothing here" now
+  say that something went wrong and offer a Retry: the issue picker used to report "No issue matches"
+  when the search had not run, and the timer widget used to report no timer running to someone whose
+  clock was going.
+- 26a2b61: Every list in the tracker that could only say "there is nothing here" now says when it failed
+  instead, with a Retry. A project's pages no longer report "No project called KERN" when the project
+  list did not arrive, the sidebar no longer tells a workspace full of projects to make its first one,
+  the planning, projects, import, repeating and workflow settings say what failed, and a dashboard
+  count tile no longer renders a confident "0" for a query that never came back.
+
 ## 0.11.17
 
 ### Patch Changes
