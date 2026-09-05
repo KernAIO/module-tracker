@@ -34,6 +34,7 @@ import { type IssueRow, issueUrl, type ProjectRow, parseSettings, toApproval, un
 import type { IssueService } from './issues.js'
 import type { NotifyService } from './notify.js'
 import { checkValue } from './values.js'
+import { sendWebhook, WebhookRefused } from './webhook.js'
 
 const registry = builtinRegistry()
 
@@ -510,15 +511,28 @@ export class TransitionService {
     return issue
   }
 
+  /**
+   * Fire-and-forget, and deliberately so: a transition must not fail because the endpoint an admin
+   * configured is down. What it must not do is reach an address the workspace has no business
+   * reaching — `sendWebhook` is the gate, and the reason a refusal is logged apart from a transport
+   * failure is that they need different answers from whoever reads the log.
+   */
   private async callWebhook(intent: Extract<Intent, { kind: 'webhook' }>, issue: Issue): Promise<void> {
     try {
-      await fetch(intent.url, {
+      await sendWebhook({
+        url: intent.url,
         method: intent.method,
-        headers: { 'content-type': 'application/json', ...(intent.headers ?? {}) },
+        headers: intent.headers,
         body: intent.method === 'GET' ? undefined : JSON.stringify(intent.payload ?? { issue }),
-        signal: AbortSignal.timeout(10_000),
       })
     } catch (err) {
+      if (err instanceof WebhookRefused) {
+        this.kernel.log.warn(
+          { reason: err.message, url: intent.url, issueId: issue.id },
+          'tracker: workflow webhook refused',
+        )
+        return
+      }
       this.kernel.log.warn({ err: String(err), url: intent.url }, 'tracker: workflow webhook failed')
     }
   }
