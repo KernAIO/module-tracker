@@ -1,6 +1,7 @@
 <script lang="ts">
 import {
   BarChart,
+  Button,
   EmptyState,
   LineChart,
   navigation,
@@ -93,6 +94,23 @@ const shortDate = (date: string) => date.slice(5)
 
 <svelte:head><title>{t('reports_title')} · Kern</title></svelte:head>
 
+<!--
+  A report that fails has to say so.
+
+  Every branch below used to stop at `isPending` and `data`, so a failed query rendered the tab's
+  heading, its one-line explanation and then nothing — which reads as "we looked and there is
+  nothing", the one answer that is never true when the request never came back.
+-->
+{#snippet failed(retry: () => void)}
+  <div class="state">
+    <EmptyState compact icon="triangle-alert" title={t('error_title')} description={t('report_failed')}>
+      {#snippet actions()}
+        <Button size="sm" variant="secondary" onclick={retry}>{t('common.retry')}</Button>
+      {/snippet}
+    </EmptyState>
+  </div>
+{/snippet}
+
 <div class="reports">
   <PageHeader
     crumbs={[{ label: workspace?.name ?? '' }, { label: t('title'), href: `/${slug}/tracker` }]}
@@ -102,6 +120,16 @@ const shortDate = (date: string) => date.slice(5)
 
   {#if projectsQuery.isPending}
     <div class="state"><Spinner /></div>
+  {:else if projectsQuery.isError}
+    <div class="state">
+      <EmptyState icon="triangle-alert" title={t('error_title')} description={t('projects_failed')}>
+        {#snippet actions()}
+          <Button size="sm" variant="secondary" onclick={() => void projectsQuery.refetch()}>
+            {t('common.retry')}
+          </Button>
+        {/snippet}
+      </EmptyState>
+    </div>
   {:else if !projects.length}
     <EmptyState icon="diamond" title={t('reports_no_projects')} />
   {:else}
@@ -128,8 +156,16 @@ const shortDate = (date: string) => date.slice(5)
       {#if tab === 'burndown'}
         <h2>{t('report_burndown')}</h2>
         <p class="what">{t('report_burndown_hint')}</p>
-        {#if !activeCycle}
+        <!-- The cycle list is what decides "no cycle yet", so its own failure has to be told
+             apart from an answer of none. -->
+        {#if cyclesQuery.isError}
+          {@render failed(() => void cyclesQuery.refetch())}
+        {:else if cyclesQuery.isPending}
+          <div class="state"><Spinner /></div>
+        {:else if !activeCycle}
           <p class="empty">{t('report_no_cycle')}</p>
+        {:else if burndownQuery.isError}
+          {@render failed(() => void burndownQuery.refetch())}
         {:else if burndownQuery.isPending}
           <div class="state"><Spinner /></div>
         {:else if burndownQuery.data}
@@ -154,7 +190,9 @@ const shortDate = (date: string) => date.slice(5)
       {:else if tab === 'velocity'}
         <h2>{t('report_velocity')}</h2>
         <p class="what">{t('report_velocity_hint')}</p>
-        {#if velocityQuery.isPending}
+        {#if velocityQuery.isError}
+          {@render failed(() => void velocityQuery.refetch())}
+        {:else if velocityQuery.isPending}
           <div class="state"><Spinner /></div>
         {:else if velocityQuery.data}
           <BarChart
@@ -180,7 +218,9 @@ const shortDate = (date: string) => date.slice(5)
       {:else if tab === 'flow'}
         <h2>{t('report_flow')}</h2>
         <p class="what">{t('report_flow_hint')}</p>
-        {#if flowQuery.isPending}
+        {#if flowQuery.isError}
+          {@render failed(() => void flowQuery.refetch())}
+        {:else if flowQuery.isPending}
           <div class="state"><Spinner /></div>
         {:else if flowQuery.data}
           <!-- Two charts, not three lines on one: a few issues a day and a backlog of forty share
@@ -219,7 +259,9 @@ const shortDate = (date: string) => date.slice(5)
       {:else if tab === 'cfd'}
         <h2>{t('report_cfd')}</h2>
         <p class="what">{t('report_cfd_hint')}</p>
-        {#if cfdQuery.isPending}
+        {#if cfdQuery.isError}
+          {@render failed(() => void cfdQuery.refetch())}
+        {:else if cfdQuery.isPending}
           <div class="state"><Spinner /></div>
         {:else if cfdQuery.data}
           <StackedAreaChart
@@ -236,7 +278,9 @@ const shortDate = (date: string) => date.slice(5)
       {:else}
         <h2>{t('report_time')}</h2>
         <p class="what">{t('report_time_hint')}</p>
-        {#if timeQuery.isPending}
+        {#if timeQuery.isError}
+          {@render failed(() => void timeQuery.refetch())}
+        {:else if timeQuery.isPending}
           <div class="state"><Spinner /></div>
         {:else if timeQuery.data}
           {@const report = timeQuery.data}
