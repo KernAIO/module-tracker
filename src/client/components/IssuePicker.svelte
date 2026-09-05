@@ -86,6 +86,16 @@ $effect(() => {
     <ul class="results" role="listbox">
       {#if results.isPending}
         <li class="state"><Spinner size={14} /></li>
+      {:else if results.isError}
+        <!-- A search that failed is not a search that found nothing. "No issue matches" for a
+             request that never came back is how somebody concludes the issue they are looking for
+             was deleted, and then makes a second one. -->
+        <li class="state failed">
+          <span>{t('pick_issue_failed')}</span>
+          <button type="button" class="retry" onclick={() => void results.refetch()}>
+            {t('common.retry')}
+          </button>
+        </li>
       {:else if !items.length}
         <li class="state">{t('pick_issue_none')}</li>
       {:else}
@@ -176,5 +186,21 @@ input:focus-visible {
   padding: 6px;
   font-size: 12px;
   color: var(--kern-ink-350);
+}
+.failed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* `.results button` above is the option style — a full-width row. Undo the parts of it that would
+   make the retry look like one of the matches. */
+.results button.retry {
+  width: auto;
+  flex: none;
+  padding: 2px 6px;
+  font-size: 12px;
+  color: var(--kern-accent);
+  text-decoration: underline;
 }
 </style>

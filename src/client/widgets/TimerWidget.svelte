@@ -58,6 +58,13 @@ const stop = createMutation(() => ({
   <p class="label">{t('widget_timer_title')}</p>
   {#if query.isPending}
     <p class="idle">{t('common.loading')}</p>
+  {:else if query.isError}
+    <!-- "No timer running" for a query that failed is a lie told to the one person who would
+         notice: somebody whose clock is running and who now believes it is not. -->
+    <div class="failed">
+      <p class="idle">{t('common.error')}</p>
+      <Button size="xs" variant="ghost" onclick={() => void query.refetch()}>{t('common.retry')}</Button>
+    </div>
   {:else if !timer}
     <p class="idle">{t('widget_timer_idle')}</p>
   {:else}
@@ -88,6 +95,11 @@ const stop = createMutation(() => ({
   .idle {
     font-size: 12.5px;
     color: var(--kern-ink-450);
+  }
+  .failed {
+    display: grid;
+    justify-items: start;
+    gap: 4px;
   }
   .issue {
     display: flex;
