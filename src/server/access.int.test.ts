@@ -399,6 +399,35 @@ describe('what workspace search hands back', () => {
   })
 
   /**
+   * The same readership change arriving as an event rather than a call.
+   *
+   * `core.member.removed` drops the person from every project in the workspace at once, so it is
+   * the one path where a single change can go stale in several projects. Driven through the
+   * module's own subscription rather than through the service, because the handler is what a
+   * deployed instance runs.
+   */
+  it('follows a member removed from the whole workspace', async () => {
+    const { projectId, issueId } = await projectWithIssue('WSR', 'private', [ALICE, DAVE])
+    expect(titleOf('WSR')(await searchTitlesFor(dave())), 'the setup did not index the issue').toBe(true)
+
+    const handler = trackerModule.subscriptions?.['core.member.removed']
+    expect(handler, 'the subscription this test drives is gone').toBeTypeOf('function')
+    await handler!({ payload: { workspaceId: WS, userId: DAVE } } as never, kernel)
+
+    await expect(run(dave())((tx) => svc.issues.get(tx, dave(), WS, issueId))).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(
+      titleOf('WSR')(await searchTitlesFor(dave())),
+      'a member removed from the workspace kept a hit on a private project',
+    ).toBe(false)
+    expect(titleOf('WSR')(await searchTitlesFor(alice())), 'the remaining member lost their hit').toBe(true)
+    // The project is the thing that changed, so its own member list is what the acl is now.
+    const members = await run(alice())((tx) => svc.projects.listMembers(tx, alice(), WS, projectId))
+    expect(members.map((m) => m.userId)).toEqual([ALICE])
+  })
+
+  /**
    * (c) A project-scoped **deny** binding. This asserts the leak, because the leak is what happens.
    *
    * `core.roles.bind` writes a deny for any administrator who narrows somebody out of one project,
