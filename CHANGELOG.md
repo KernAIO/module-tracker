@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.14.4
+
+### Patch Changes
+
+- chore: check the packed tarball can resolve its own imports
+
 ## 0.14.3
 
 ### Patch Changes
