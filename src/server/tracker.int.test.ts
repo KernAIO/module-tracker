@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto'
 import { CollabAccess, CollabAccessInput, type Principal } from '@kernhq/contracts'
 import { createKernel, KernError, type Kernel, type Tx } from '@kernhq/kernel'
-import { sql } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import pg from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { trackerPermissions } from '../contract/index.js'
 import type { CreateIssue, Issue, IssueQueryInput } from '../contract/models.js'
 import * as models from '../contract/models.js'
 import { trackerModule } from './index.js'
-import { issues } from './schema.js'
+import { issues, projects } from './schema.js'
 import { type TrackerServices, trackerServices } from './services/index.js'
 
 /**
@@ -104,7 +105,50 @@ function registerCoreStubs(k: Kernel) {
       handler: async (input: { userId: string }) => principal(input.userId, WS_A),
     },
     'authz.customRolePermissions': { handler: async () => [] },
-    'authz.bindings': { handler: async () => [] },
+    /**
+     * What core actually answers for a guest, rather than an empty list.
+     *
+     * A guest's workspace-effective set is a **deny floor**: every permission that is not
+     * workspace- or instance-scoped is removed, so a project-scoped grant can hand back one project
+     * at a time. Returning `[]` here gave the tests a guest who held `tracker.project.view` and
+     * every other project-scoped default at workspace level — a person core does not produce — and
+     * three cases below passed on it.
+     *
+     * So the guest is given the thing that makes them able to work: a project-scoped allow of the
+     * keys whose `defaultRoles` include `guest`, on every project in the workspace. The tests that
+     * assert a guest is refused are unaffected — none of those keys is a guest default — and the
+     * private project stays hidden by membership rather than by permission.
+     */
+    'authz.bindings': {
+      handler: async (input: { workspaceId: string; role: string }) => {
+        if (input.role !== 'guest') return []
+        const guestKeys = trackerPermissions.filter((p) => p.defaultRoles?.includes('guest'))
+        const projectIds = await k.database.withWorkspace(input.workspaceId, (tx) =>
+          tx.select({ id: projects.id }).from(projects).where(eq(projects.workspaceId, input.workspaceId)),
+        )
+        return [
+          {
+            subjectType: 'builtin_role',
+            subjectId: 'guest',
+            permissions: k.authz
+              .allPermissions()
+              .filter((p) => p.scope !== 'workspace' && p.scope !== 'instance')
+              .map((p) => p.key),
+            scopeKind: 'workspace',
+            scopeId: input.workspaceId,
+            deny: true,
+          },
+          ...projectIds.map((p) => ({
+            subjectType: 'builtin_role',
+            subjectId: 'guest',
+            permissions: guestKeys.map((d) => d.key),
+            scopeKind: 'project',
+            scopeId: p.id,
+            deny: false,
+          })),
+        ]
+      },
+    },
     'settings.getModule': { handler: async () => ({}) },
   })
 }
