@@ -72,7 +72,7 @@
     "@changesets/cli": "^2.27.0",
     "@kernhq/contracts": "^0.8.0",
     "@kernhq/kernel": "^0.10.0",
-    "@kernhq/testing": "^0.1.12",
+    "@kernhq/testing": "^0.1.14",
     "@kernhq/tsconfig": "^0.1.0",
     "@kernhq/ui": "^0.14.0",
     "@tanstack/svelte-query": "^6.1.0",

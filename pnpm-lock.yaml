@@ -43,8 +43,8 @@ importers:
         specifier: ^0.10.0
         version: 0.10.0(@types/pg@8.23.1)
       '@kernhq/testing':
-        specifier: ^0.1.12
-        version: 0.1.12(@types/pg@8.23.1)
+        specifier: ^0.1.14
+        version: 0.1.14
       '@kernhq/tsconfig':
         specifier: ^0.1.0
         version: 0.1.1
@@ -849,8 +849,8 @@ packages:
   '@kernhq/sdk@0.1.9':
     resolution: {integrity: sha512-ATzEaXUbBy5OMqX34tc/JeOXQdR8yAvxTdIatnzpHLjYMdteaxeOyEmADOIZWtXo6uiURq7DWYtHCqWK2+XQSQ==}
 
-  '@kernhq/testing@0.1.12':
-    resolution: {integrity: sha512-7IoD6xLTsjRKRXz3iN0dxHvNvEA571tMVegPDqUeXzaTfXnHBtnmXRcC4Al4/Cuv7c99ZuGgN4VD9Ryz0i7UMw==}
+  '@kernhq/testing@0.1.14':
+    resolution: {integrity: sha512-DFgIeTogxuY2Pi9Qh9RlD7X3sMJKzcytuZr+eRT3foZ4IHydDwIOUFlDzCVFQOydw31ZJkMUrXLkX2UAUib8Ow==}
 
   '@kernhq/tsconfig@0.1.1':
     resolution: {integrity: sha512-dpsKywRORVpmPlvGBaBlzhhmsAJ8LY2MBj0T9fdo7mGVN7r6+DyYVs6yuLUc/YtV+Ll1riAGnQN/tpxKMb3vnA==}
@@ -3973,48 +3973,17 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@kernhq/testing@0.1.12(@types/pg@8.23.1)':
+  '@kernhq/testing@0.1.14':
     dependencies:
-      '@kernhq/kernel': 0.9.1(@types/pg@8.23.1)
       '@testcontainers/postgresql': 12.1.0
       pg: 8.23.0
       testcontainers: 12.1.0
     transitivePeerDependencies:
-      - '@aws-sdk/client-rds-data'
-      - '@cloudflare/workers-types'
-      - '@electric-sql/pglite'
-      - '@libsql/client'
-      - '@libsql/client-wasm'
-      - '@neondatabase/serverless'
-      - '@op-engineering/op-sqlite'
-      - '@opentelemetry/api'
-      - '@planetscale/database'
-      - '@prisma/client'
-      - '@tidbcloud/serverless'
-      - '@types/better-sqlite3'
-      - '@types/pg'
-      - '@types/sql.js'
-      - '@upstash/redis'
-      - '@vercel/postgres'
-      - '@xata.io/client'
       - bare-abort-controller
       - bare-buffer
-      - better-sqlite3
-      - bun-types
-      - crossws
-      - expo-sqlite
-      - gel
-      - knex
-      - kysely
-      - mysql2
       - pg-native
-      - postgres
-      - prisma
       - react-native-b4a
-      - sql.js
-      - sqlite3
       - supports-color
-      - ws
 
   '@kernhq/tsconfig@0.1.1': {}
 
