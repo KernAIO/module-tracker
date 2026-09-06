@@ -318,8 +318,20 @@ export async function seedTrackerDemo(ctx: DemoSeedContext): Promise<DemoSeedSum
        * delivery means this can be asked twice, and a second pass must not drop a duplicate set of
        * projects into a workspace somebody has started using. "No projects" is the only honest
        * definition of an untouched tracker.
+       *
+       * **`workspace_id` is in the predicate, and leaving it to row-level security is a bug.** The
+       * transaction is bound to the workspace, so on a correctly-configured instance RLS scopes this
+       * on its own — and where it does not, which is any database whose owner can bypass a policy,
+       * an unscoped guard sees *another workspace's* projects and reports this one as used. Measured
+       * on a development database: the first workspace seeded, and every one after it skipped with
+       * "workspace not empty" while holding nothing. A guard that fails by doing nothing needs the
+       * predicate written out.
        */
-      const [existing] = await tx.select({ id: projects.id }).from(projects).limit(1)
+      const [existing] = await tx
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.workspaceId, workspaceId))
+        .limit(1)
       if (existing) return { skipped: true }
 
       const labelIds = new Map<string, string>()

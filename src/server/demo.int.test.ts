@@ -129,6 +129,30 @@ describe('the demo seeder', () => {
     expect(rows.issues.filter((i) => i.cycleId).length).toBeGreaterThan(5)
   })
 
+  /*
+   * The case the first version of these seeders got wrong, and the reason it is a test rather than
+   * a comment: the emptiness guard left `workspace_id` to row-level security, so on any database
+   * whose owner can bypass a policy it saw the *previous* workspace's projects and skipped. Every
+   * workspace after the first on such an instance was created empty, reporting success. This test
+   * database is exactly that kind — it connects as a superuser — so a second workspace here is the
+   * cheapest possible reproduction.
+   */
+  it('fills a second workspace in the same database', async () => {
+    const other = randomUUID()
+    const summary = await seedTrackerDemo({
+      kernel,
+      workspaceId: other,
+      actorId: OWNER,
+      actor: actor(),
+      now: new Date(),
+    })
+    expect(summary.skipped).toBeFalsy()
+    const rows = await kernel.database.withWorkspace(other, (tx) =>
+      tx.select().from(projects).where(eq(projects.workspaceId, other)),
+    )
+    expect(rows.length).toBe(3)
+  })
+
   it('leaves a workspace that already holds something alone', async () => {
     const before = await kernel.database.withWorkspace(WS, (tx) =>
       tx.select().from(issues).where(eq(issues.workspaceId, WS)),
