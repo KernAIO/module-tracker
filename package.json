@@ -103,6 +103,12 @@
       "optional": true
     }
   },
+  "pnpm": {
+    "overrides": {
+      "@kernhq/contracts": "$@kernhq/contracts",
+      "@kernhq/kernel": "$@kernhq/kernel"
+    }
+  },
   "packageManager": "pnpm@10.30.3",
   "engines": {
     "node": ">=24"
