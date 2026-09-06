@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.14.3
+
+### Patch Changes
+
+- chore(renovate): drop dead @kernhq automerge rule
+
 ## 0.14.2
 
 ### Patch Changes
