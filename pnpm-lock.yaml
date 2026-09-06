@@ -6,7 +6,7 @@ settings:
 
 overrides:
   '@kernhq/contracts': ^0.8.0
-  '@kernhq/kernel': ^0.10.0
+  '@kernhq/kernel': ^0.10.4
 
 importers:
 
@@ -44,8 +44,8 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0
       '@kernhq/kernel':
-        specifier: ^0.10.0
-        version: 0.10.0(@types/pg@8.23.1)
+        specifier: ^0.10.4
+        version: 0.10.4(@types/pg@8.23.1)
       '@kernhq/testing':
         specifier: ^0.1.14
         version: 0.1.14
@@ -835,8 +835,8 @@ packages:
   '@kernhq/contracts@0.8.0':
     resolution: {integrity: sha512-UcQE9tYnlrwahW7v3ilUvgJSaiLdrA6CaOfONGhUBqh2s7LStPUa9skeyfbGU6TWJPFhhlOi2nKp30HVpxnATg==}
 
-  '@kernhq/kernel@0.10.0':
-    resolution: {integrity: sha512-XjJU4JsYq54ASWd0KVdv3nOtM0Skf0iNENWpAFMgyYoVsA8CNqvT2Wr7Y4kl/j6HnZiw59ycjUdHSY+waSIs3w==}
+  '@kernhq/kernel@0.10.4':
+    resolution: {integrity: sha512-nT7Akeq5BG0EafhOdY6GFU1KreghUc15b/fMZ2GtLcBj+0Lx9khBMb709be+GGaPqV02Zi0ox5FWGINZFedMSw==}
 
   '@kernhq/sdk@0.1.5':
     resolution: {integrity: sha512-+dmK3PZCnt6pqFOK5F198rv1Rxy4GVwAhF9k+Jc96Fyfj3nUGDF7zMeuKRtrgP6kbEGRfm1QzakUMEDlARFHUA==}
@@ -3822,7 +3822,7 @@ snapshots:
     transitivePeerDependencies:
       - '@opentelemetry/api'
 
-  '@kernhq/kernel@0.10.0(@types/pg@8.23.1)':
+  '@kernhq/kernel@0.10.4(@types/pg@8.23.1)':
     dependencies:
       '@aws-sdk/client-s3': 3.1115.0
       '@aws-sdk/s3-request-presigner': 3.1115.0
@@ -3915,7 +3915,7 @@ snapshots:
     dependencies:
       '@hocuspocus/provider': 4.6.0(y-protocols@1.0.7(yjs@13.6.32))(yjs@13.6.32)
       '@kernhq/contracts': 0.8.0
-      '@kernhq/kernel': 0.10.0(@types/pg@8.23.1)
+      '@kernhq/kernel': 0.10.4(@types/pg@8.23.1)
       '@kernhq/sdk': 0.1.9
       '@lucide/svelte': 1.34.0(svelte@5.56.10)
       '@tanstack/svelte-query': 6.1.43(svelte@5.56.10)

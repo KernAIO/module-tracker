@@ -32,6 +32,7 @@ import {
   trackerPermissions,
   UpdateIssue,
 } from '../contract/index.js'
+import { seedTrackerDemo } from './demo.js'
 import { trackerRouter } from './router.js'
 import { cycles, fieldDefs, issues, projectMembers, projects, schema, workspaces } from './schema.js'
 import { issueUrl, projectUrl } from './services/db.js'
@@ -732,6 +733,8 @@ export const trackerModule = defineServerModule({
       },
     ],
   },
+
+  demo: { seed: seedTrackerDemo },
 
   onWorkspaceEnabled: async (workspaceId, kernel) => {
     await kernel.database.db
