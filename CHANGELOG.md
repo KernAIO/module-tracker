@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.14.2
+
+### Patch Changes
+
+- test: cover the workspace-removal path of the acl re-index
+
 ## 0.14.1
 
 ### Patch Changes
