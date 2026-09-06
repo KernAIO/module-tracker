@@ -28,20 +28,37 @@ const objectRef = (type: string, id: string) => ({ module: MODULE_ID, type, id }
  * - a **private** project adds a membership gate on top, and that gate is the narrow one — a
  *   workspace owner who is not a member is refused — so the acl is the member ids.
  *
- * **Two limits, stated rather than papered over.**
+ * The acl is denormalised onto each issue document, so it is only ever as fresh as the last
+ * re-index. Everything that changes who may read a project therefore re-indexes that project's
+ * issues: `projects.update` when the visibility moves, `addMembers`/`removeMember`, and the
+ * `core.member.removed` subscription. `IssueService.reindex` on an issue mutation is not enough —
+ * a project made private with nobody touching an issue afterwards kept every non-member's hit
+ * (measured in `access.int.test.ts` before those call sites existed).
  *
- * The acl is a set overlap, so it cannot express the *conjunction* the private case really is
- * (a member **and** a role that holds the permission). A guest who is a member of a private project
- * therefore matches the acl and is still refused when they open the hit. Nothing in the product
- * writes that combination today — the tracker's project member list is the only thing that puts a
- * guest on a project, and it grants no permission — but it is the looseness that exists.
+ * **Three limits, stated rather than papered over. Two of them fail open.**
  *
- * And a guest **scoped to a project by a role binding** finds nothing here, although opening the
- * issue by key works. Tracker cannot close that: `AuthzStore` answers "which bindings does this
- * user hold", and no procedure anywhere enumerates "which subjects hold a binding on this scope",
- * so the subjects cannot be written down. Closing it needs a subject core can put in the search
- * `subjects` array for the scopes a caller is bound to. The direction of the gap is the one to
- * have — a hit that is missing, not a hit that leaks.
+ * 1. **A project-scoped deny binding fails open.** `core.roles.bind` stores a deny for any
+ *    administrator who narrows somebody out of one project, and `Authz.can` honours it — so
+ *    `issues.get` answers FORBIDDEN while the hit survives, because a workspace-visibility acl says
+ *    `role:member` and the denied caller's subjects still contain `role:member`. Measured
+ *    2026-09-06; `access.int.test.ts` asserts the leak so this paragraph and the behaviour cannot
+ *    drift apart again.
+ * 2. **The conjunction a private project really is fails open too.** The acl is a set *overlap*, so
+ *    it cannot express "a member **and** a role that holds the permission": a guest who is a member
+ *    of a private project matches the acl and is still refused when they open the hit. Nothing in
+ *    the product writes that combination today — the tracker's project member list is the only
+ *    thing that puts a guest on a project, and it grants no permission — but it is a leak, not a
+ *    gap.
+ * 3. A guest **scoped to a project by a role binding** finds nothing here, although opening the
+ *    issue by key works. That one fails closed.
+ *
+ * Neither open limit is closable in this module, and the reason is the same for all three: an
+ * overlap is *additive* and a deny is *subtractive*. Writing them down would mean an acl that
+ * enumerates the readers rather than naming roles, which needs both the workspace member list and
+ * an answer to "which subjects hold a binding on this scope" — `core.authz.bindings` answers the
+ * opposite question, per user, and no procedure anywhere enumerates the other direction. The
+ * alternatives both live in core: match a hit against the module's own visible-object set at query
+ * time, or apply denies in `search()` alongside `subjects`.
  */
 export const WORKSPACE_PROJECT_SUBJECTS = ['role:owner', 'role:admin', 'role:member'] as const
 
@@ -166,10 +183,45 @@ export function issueSearchDocument(
 }
 
 /**
+ * Every non-archived issue in one project, as search documents, with the project's acl read once.
+ *
+ * This is what a readership change re-indexes through. It takes a `Tx` rather than a `Kernel`
+ * because every caller is a mutation that has just changed the membership or the visibility inside
+ * its own transaction — reading the acl on a fresh connection would read the state before it.
+ */
+export async function* projectIssueDocuments(
+  tx: Tx,
+  workspaceId: string,
+  projectId: string,
+): AsyncGenerator<core.SearchDocument> {
+  const acl = (await issueSearchAclFor(tx, workspaceId, projectId)) ?? []
+  const keys = await searchableKeys(tx, workspaceId)
+  let cursor: string | null = null
+  for (;;) {
+    const rows: Array<typeof issues.$inferSelect> = await tx
+      .select()
+      .from(issues)
+      .where(
+        and(
+          eq(issues.workspaceId, workspaceId),
+          eq(issues.projectId, projectId),
+          isNull(issues.archivedAt),
+          cursor ? sql`${issues.id} > ${cursor}` : sql`true`,
+        ),
+      )
+      .orderBy(issues.id)
+      .limit(500)
+    if (!rows.length) return
+    for (const row of rows) yield issueSearchDocument(workspaceId, row, { acl, searchableKeys: keys })
+    cursor = rows.at(-1)?.id ?? null
+  }
+}
+
+/**
  * Every non-archived issue in a workspace, as search documents.
  *
- * Shared by the module's `scan` indexer and by the acl backfill job, so the two cannot disagree
- * about what a tracker document looks like.
+ * Shared by the module's `scan` indexer and by the acl sweep job, so the two cannot disagree about
+ * what a tracker document looks like.
  */
 export async function* scanIssueDocuments(
   kernel: Kernel,

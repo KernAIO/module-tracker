@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import type { Principal } from '@kernhq/contracts'
+import type { core, Principal } from '@kernhq/contracts'
 import { KernError, type Kernel, type Tx, uuidv7 } from '@kernhq/kernel'
 import { and, asc, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm'
 import { trackerEvents } from '../../contract/events.js'
@@ -56,6 +56,7 @@ import {
   toProjectTemplate,
 } from './db.js'
 import type { NotifyService } from './notify.js'
+import { projectIssueDocuments } from './search.js'
 
 const RESOLVED = ['done', 'cancelled']
 
@@ -261,6 +262,10 @@ export class ProjectService {
       })
       .where(and(eq(projects.workspaceId, workspaceId), eq(projects.id, projectId)))
       .returning()
+    // Visibility is who may read the project, so the acl on every one of its issue documents just
+    // changed. Nothing else in this patch touches readership.
+    if (patch.visibility !== undefined && patch.visibility !== current.visibility)
+      await this.reindexIssues(tx, workspaceId, projectId)
     await this.kernel.emit(
       trackerEvents.projectUpdated,
       {
@@ -429,6 +434,10 @@ export class ProjectService {
       .onConflictDoNothing({ target: [projectMembers.projectId, projectMembers.userId] })
       .returning()
     await this.refreshMemberCount(tx, workspaceId, projectId)
+    // Membership is the whole of the acl for a private project. Guarded on `rows` so an insert that
+    // conflicted its way to nothing does not re-index, and so project creation — which adds its
+    // members before any issue exists — pages over an empty table rather than skipping the call.
+    if (rows.length) await this.reindexIssues(tx, workspaceId, projectId)
     return rows.map(toProjectMember)
   }
 
@@ -464,6 +473,7 @@ export class ProjectService {
         ),
       )
     await this.refreshMemberCount(tx, workspaceId, projectId)
+    await this.reindexIssues(tx, workspaceId, projectId)
     await this.notify.change(workspaceId, 'project', projectId, 'updated')
   }
 
@@ -489,6 +499,25 @@ export class ProjectService {
       .returning()
     if (!row) throw KernError.notFound('Project member')
     return toProjectMember(row)
+  }
+
+  /**
+   * Rewrite every issue document in a project after a change to who may read it.
+   *
+   * The search acl is denormalised onto each document, and `IssueService.reindex` only runs on an
+   * issue mutation — so without this a project made private, or a member removed from a private
+   * one, left the old readers holding the key, title and indexed description of every issue in it
+   * until somebody happened to edit one. Nothing repaired it either: the `search-acl` job sweeps a
+   * workspace at most once a day, so the stale window was up to that long and, before the job
+   * became a sweep, permanent.
+   */
+  async reindexIssues(tx: Tx, workspaceId: string, projectId: string): Promise<void> {
+    const batch: core.SearchDocument[] = []
+    for await (const document of projectIssueDocuments(tx, workspaceId, projectId)) {
+      batch.push(document)
+      if (batch.length >= 200) await this.notify.index(batch.splice(0))
+    }
+    await this.notify.index(batch)
   }
 
   private async refreshMemberCount(tx: Tx, workspaceId: string, projectId: string): Promise<void> {

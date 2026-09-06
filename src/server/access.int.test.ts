@@ -37,6 +37,7 @@ const WS = randomUUID()
 const ALICE = randomUUID()
 const BOB = randomUUID()
 const CAROL = randomUUID()
+const DAVE = randomUUID()
 
 /** Ids filled in `beforeAll`. */
 let openProject: string
@@ -58,6 +59,13 @@ const indexed = new Map<string, core.SearchDocument>()
  */
 const guestScope = new Map<string, string>()
 
+/**
+ * `userId -> projectId` a project-scoped **deny** of `tracker.project.view` has been written for,
+ * exactly as `core.roles.bind` stores one. Any workspace role can carry one; it is the narrowing an
+ * administrator reaches for when somebody must not see one project.
+ */
+const projectDenies = new Map<string, string>()
+
 const principal = (userId: string, role: 'owner' | 'admin' | 'member' | 'guest' = 'admin'): Principal =>
   ({
     kind: 'user',
@@ -74,6 +82,7 @@ const principal = (userId: string, role: 'owner' | 'admin' | 'member' | 'guest' 
 const alice = () => principal(ALICE, 'admin')
 const bob = () => principal(BOB, 'member')
 const carol = () => principal(CAROL, 'guest')
+const dave = () => principal(DAVE, 'member')
 
 const run =
   (actor: Principal) =>
@@ -102,30 +111,40 @@ function registerCoreStubs(k: Kernel) {
     'authz.customRolePermissions': { handler: async () => [] },
     'authz.bindings': {
       handler: async (input: { workspaceId: string; userId: string; role: string }) => {
-        if (input.role !== 'guest') return []
-        const floor = k.authz
-          .allPermissions()
-          .filter((p) => p.scope !== 'workspace' && p.scope !== 'instance')
-          .map((p) => p.key)
-        const bindings = [
-          {
+        const bindings: Array<Record<string, unknown>> = []
+        if (input.role === 'guest') {
+          const floor = k.authz
+            .allPermissions()
+            .filter((p) => p.scope !== 'workspace' && p.scope !== 'instance')
+            .map((p) => p.key)
+          bindings.push({
             subjectType: 'builtin_role',
             subjectId: 'guest',
             permissions: floor,
             scopeKind: 'workspace',
             scopeId: input.workspaceId,
             deny: true,
-          },
-        ]
-        const scoped = guestScope.get(input.userId)
-        if (scoped)
+          })
+          const scoped = guestScope.get(input.userId)
+          if (scoped)
+            bindings.push({
+              subjectType: 'user',
+              subjectId: input.userId,
+              permissions: ['tracker.project.view', 'tracker.issue.view'],
+              scopeKind: 'project',
+              scopeId: scoped,
+              deny: false,
+            })
+        }
+        const denied = projectDenies.get(input.userId)
+        if (denied)
           bindings.push({
             subjectType: 'user',
             subjectId: input.userId,
             permissions: ['tracker.project.view', 'tracker.issue.view'],
             scopeKind: 'project',
-            scopeId: scoped,
-            deny: false,
+            scopeId: denied,
+            deny: true,
           })
         return bindings
       },
@@ -161,6 +180,27 @@ async function searchTitlesFor(who: Principal): Promise<string[]> {
 }
 
 const titleOf = (key: string) => (titles: string[]) => titles.some((t) => t.startsWith(key))
+
+/** A project with one issue in it, so a test can own the readership it is about to change. */
+async function projectWithIssue(
+  key: string,
+  visibility: 'workspace' | 'private',
+  memberIds: string[],
+): Promise<{ projectId: string; issueId: string }> {
+  const project = await run(alice())((tx) =>
+    svc.projects.create(tx, alice(), WS, {
+      key,
+      name: key,
+      template: 'simple',
+      visibility,
+      memberIds,
+    } as never),
+  )
+  const issue = await run(alice())((tx) =>
+    svc.issues.create(tx, alice(), WS, { projectId: project.id, title: `${key} work` } as CreateIssue),
+  )
+  return { projectId: project.id, issueId: issue.id }
+}
 
 beforeAll(async () => {
   admin = new pg.Client({ connectionString: BASE_URL })
@@ -288,28 +328,105 @@ describe('what workspace search hands back', () => {
     ).rejects.toMatchObject({ code: 'FORBIDDEN' })
   })
 
-  it('follows a project that turns private, so an old reader loses the hit', async () => {
+  /**
+   * (a) A project turned private, and nothing touched an issue afterwards.
+   *
+   * The acl is denormalised onto each issue document, so a readership change only reaches the index
+   * through a re-index. Until `projects.update` performed one, the *only* thing that rewrote a
+   * tracker document was a mutation on the issue itself — so a project could be made private and
+   * every non-member kept the key, title and indexed description of every issue in it until somebody
+   * happened to edit one.
+   */
+  it('follows a project that turns private, with no issue touched afterwards', async () => {
+    const { projectId, issueId } = await projectWithIssue('FLP', 'workspace', [ALICE])
+    expect(titleOf('FLP')(await searchTitlesFor(bob())), 'the setup did not index the issue').toBe(true)
+
     await run(alice())((tx) =>
-      svc.projects.update(tx, alice(), WS, otherProject, { visibility: 'private' } as never),
+      svc.projects.update(tx, alice(), WS, projectId, { visibility: 'private' } as never),
     )
-    // The document is rewritten by the next mutation on the issue, which is what a project's
-    // visibility change has to be followed by today.
-    await run(alice())((tx) =>
-      svc.issues.update(tx, alice(), WS, issueIn.get(otherProject)!, {
-        title: 'Other work, now private',
-      } as never),
-    )
-    const titles = await searchTitlesFor(bob())
-    expect(titleOf('OTH')(titles), 'a member kept a hit on a project that went private').toBe(false)
-    expect(titleOf('OTH')(await searchTitlesFor(alice())), 'the project member lost their own hit').toBe(true)
-    await run(alice())((tx) =>
-      svc.projects.update(tx, alice(), WS, otherProject, { visibility: 'workspace' } as never),
-    )
+
+    // What the caller is actually refused, so the missing hit below is a hit they cannot open.
+    await expect(run(bob())((tx) => svc.issues.get(tx, bob(), WS, issueId))).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(
+      titleOf('FLP')(await searchTitlesFor(bob())),
+      'a member kept a hit on a project that went private',
+    ).toBe(false)
+    expect(titleOf('FLP')(await searchTitlesFor(alice())), 'the project member lost their own hit').toBe(true)
+  })
+
+  /**
+   * (b) A member removed from a private project.
+   *
+   * `removeMember` deletes the membership row, which is the whole of that person's access to a
+   * private project — and the acl on every issue document still named them.
+   */
+  it('follows a member removed from a private project', async () => {
+    const { projectId, issueId } = await projectWithIssue('RMV', 'private', [ALICE, DAVE])
+    expect(titleOf('RMV')(await searchTitlesFor(dave())), 'the setup did not index the issue').toBe(true)
+
+    await run(alice())((tx) => svc.projects.removeMember(tx, alice(), WS, projectId, DAVE))
+
+    await expect(run(dave())((tx) => svc.issues.get(tx, dave(), WS, issueId))).rejects.toMatchObject({
+      code: 'FORBIDDEN',
+    })
+    expect(
+      titleOf('RMV')(await searchTitlesFor(dave())),
+      'a removed member kept a hit on the private project',
+    ).toBe(false)
+    expect(titleOf('RMV')(await searchTitlesFor(alice())), 'the remaining member lost their hit').toBe(true)
+  })
+
+  /**
+   * The other direction of the same mechanism: a member *added* to a private project could not find
+   * its issues, because their id was not in an acl written before they joined. Fail-closed, so it
+   * disclosed nothing — and it made the project's search useless to the person who was just given it.
+   */
+  it('follows a member added to a private project', async () => {
+    const { projectId, issueId } = await projectWithIssue('ADD', 'private', [ALICE])
+    expect(titleOf('ADD')(await searchTitlesFor(dave()))).toBe(false)
+
+    await run(alice())((tx) => svc.projects.addMembersChecked(tx, alice(), WS, projectId, [DAVE], 'member'))
+
+    await expect(run(dave())((tx) => svc.issues.get(tx, dave(), WS, issueId))).resolves.toMatchObject({
+      projectId,
+    })
+    expect(
+      titleOf('ADD')(await searchTitlesFor(dave())),
+      'a new member could not find the issues they can open',
+    ).toBe(true)
+  })
+
+  /**
+   * (c) A project-scoped **deny** binding. This asserts the leak, because the leak is what happens.
+   *
+   * `core.roles.bind` writes a deny for any administrator who narrows somebody out of one project,
+   * and `Authz.can` honours it — so `issues.get` is refused. The search acl cannot follow: it is a
+   * set *overlap*, which is additive, and a deny is subtractive. A workspace-visibility project's
+   * acl is `role:member`, the denied user's subjects still contain `role:member`, and the hit
+   * survives. See the limits documented on `WORKSPACE_PROJECT_SUBJECTS` in `services/search.ts`;
+   * this test exists so that comment and the behaviour cannot drift apart again.
+   */
+  it('still leaks a title past a project-scoped deny binding (known, fails open)', async () => {
+    const { projectId, issueId } = await projectWithIssue('DNY', 'workspace', [ALICE])
+    projectDenies.set(BOB, projectId)
+    try {
+      await expect(run(bob())((tx) => svc.issues.get(tx, bob(), WS, issueId))).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      })
+      expect(
+        titleOf('DNY')(await searchTitlesFor(bob())),
+        'a deny binding started being honoured by search — update the limits comment in services/search.ts',
+      ).toBe(true)
+    } finally {
+      projectDenies.delete(BOB)
+    }
   })
 })
 
-describe('the backfill for documents already indexed with a null acl', () => {
-  it('overwrites them and stamps the workspace so it runs once', async () => {
+describe('the sweep for documents whose acl has gone stale', () => {
+  it('overwrites them and stamps the workspace, so a settled one costs one query', async () => {
     // Put the index back the way the module used to leave it.
     for (const [id, document] of indexed) indexed.set(id, { ...document, acl: null })
     await kernel.database.db
@@ -328,6 +445,27 @@ describe('the backfill for documents already indexed with a null acl', () => {
     expect(row?.at).toBeInstanceOf(Date)
     // Stamped, so the next run is a query and no re-index.
     expect(await backfillSearchAcls(kernel)).toBe(0)
+  })
+
+  /**
+   * A repair that runs exactly once is not a repair mechanism.
+   *
+   * The job stamped `search_acl_backfilled_at` and never looked at that workspace again, so it
+   * could only ever fix the acls that were wrong the day it first ran — anything that went stale
+   * afterwards stayed stale for ever. The sweep re-stamps and comes round, so a document that is
+   * wrong for any reason is repaired within the interval.
+   */
+  it('comes round again rather than stamping a workspace out of its own reach', async () => {
+    for (const [id, document] of indexed) indexed.set(id, { ...document, acl: null })
+    // As it would look a day after the last sweep.
+    await kernel.database.db
+      .update(workspaces)
+      .set({ searchAclBackfilledAt: new Date(Date.now() - 48 * 60 * 60 * 1000) })
+      .where(eq(workspaces.workspaceId, WS))
+    expect(await searchTitlesFor(carol()), 'the stale state is not what it was').not.toEqual([])
+
+    expect(await backfillSearchAcls(kernel), 'the sweep skipped a workspace it had stamped').toBe(1)
+    expect(await searchTitlesFor(carol()), 'a stale document survived the sweep').toEqual([])
   })
 })
 

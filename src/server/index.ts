@@ -17,7 +17,7 @@ import {
   type Kernel,
   packageVersion,
 } from '@kernhq/kernel'
-import { and, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, lte, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import {
   CreateIssue,
@@ -265,16 +265,22 @@ const jobs: JobDef<Record<string, unknown>>[] = [
   },
   {
     /**
-     * Re-index the workspaces whose issues are still in core's search index with `acl: null`.
+     * Re-index the workspaces whose search acls are oldest, so a stale one is repaired rather than
+     * merely reported.
      *
-     * A null acl means "everybody in the workspace" to core, so those rows disclose every issue's
-     * key, title and indexed description to every member until they are overwritten. They live in
-     * `core.search_documents`, which a tracker migration must not touch, so the repair is an
-     * ordinary re-index: `core.search.index` upserts on (workspace, module, type, object), and
-     * `workspaces.search_acl_backfilled_at` records that a workspace is done so this costs one
-     * cheap query a run once it is.
+     * It began as a one-shot backfill for documents indexed with `acl: null` — which core reads as
+     * "everybody in the workspace", so those rows disclosed every issue's key, title and indexed
+     * description to every member. A stamp written once repairs the state that existed the day it
+     * ran and nothing after it, which is not a repair mechanism: the acl is denormalised, so any
+     * readership change that misses its re-index stays wrong for ever. So the sweep re-stamps and
+     * comes round again — never swept first, then oldest stamp, and only workspaces whose stamp is
+     * over a day old, which keeps a settled instance to one cheap query an hour.
      *
-     * A workspace with the module switched off is left unstamped rather than indexed: core drops a
+     * The rows live in `core.search_documents`, which a tracker migration must not touch, so the
+     * repair is an ordinary re-index: `core.search.index` upserts on (workspace, module, type,
+     * object).
+     *
+     * A workspace with the module switched off is skipped rather than indexed: core drops a
      * disabled module's documents, so there is nothing stale there, and re-enabling brings it back
      * into this job's reach on the next run.
      */
@@ -286,12 +292,19 @@ const jobs: JobDef<Record<string, unknown>>[] = [
   },
 ] as JobDef<Record<string, unknown>>[]
 
+/** How long a workspace's acls may go unverified before the sweep comes round to it again. */
+const SEARCH_ACL_SWEEP_INTERVAL_MS = 24 * 60 * 60 * 1000
+
 /** Exported for the test that proves a stale null-acl document is actually overwritten. */
 export async function backfillSearchAcls(kernel: Kernel, limit = 25): Promise<number> {
+  const due = new Date(Date.now() - SEARCH_ACL_SWEEP_INTERVAL_MS)
   const pending = await kernel.database.db
     .select({ id: workspaces.workspaceId })
     .from(workspaces)
-    .where(isNull(workspaces.searchAclBackfilledAt))
+    .where(or(isNull(workspaces.searchAclBackfilledAt), lte(workspaces.searchAclBackfilledAt, due)))
+    // nulls first, then the oldest stamp: never swept is the only state that can still be leaking
+    // from the original null-acl documents.
+    .orderBy(sql`${workspaces.searchAclBackfilledAt} asc nulls first`)
     .limit(limit)
   let done = 0
   for (const { id: workspaceId } of pending) {
@@ -366,9 +379,14 @@ export const trackerModule = defineServerModule({
       const payload = event.payload as { workspaceId: string; userId: string }
       const { workspaceId, userId } = payload
       await kernel.database.withWorkspace(workspaceId, async (tx) => {
-        await tx
+        const dropped = await tx
           .delete(projectMembers)
           .where(and(eq(projectMembers.workspaceId, workspaceId), eq(projectMembers.userId, userId)))
+          .returning({ projectId: projectMembers.projectId })
+        // Every private project they were on has their id in the acl of each of its issue
+        // documents; the membership row that put it there is gone now.
+        for (const projectId of new Set(dropped.map((r) => r.projectId)))
+          await trackerServices(kernel).projects.reindexIssues(tx, workspaceId, projectId)
         await tx
           .update(issues)
           .set({

@@ -37,10 +37,14 @@ export const workspaces = schema.table('workspaces', {
   /**
    * When this workspace's issues were last re-indexed with a real search acl.
    *
-   * Issues were indexed with `acl: null`, which core reads as "visible to everybody in the
-   * workspace", and those rows live in `core.search_documents` where no tracker migration can reach
-   * them. Null here means the workspace still has such rows; the `search-acl` job re-indexes it and
-   * stamps the column, so the repair happens once per workspace rather than on every boot.
+   * The acl is denormalised onto each document in `core.search_documents`, where no tracker
+   * migration can reach it, so every repair is an ordinary re-index. The `search-acl` job takes the
+   * oldest stamps first — null (never swept) before the rest — and re-stamps, which makes it a
+   * reconciler rather than the one-shot backfill it started as: a stamp that is only ever written
+   * once repairs the state that existed the day it ran and nothing after it.
+   *
+   * The column keeps its `search_acl_backfilled_at` name because renaming it would be a migration
+   * that buys nothing.
    */
   searchAclBackfilledAt: ts('search_acl_backfilled_at'),
 })
