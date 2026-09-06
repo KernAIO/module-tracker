@@ -43,3 +43,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # After the build, never in lint: the `./contract` and `./server` entries point into `dist`.
+      # This packs the package for real and walks the imports of what the tarball would contain —
+      # the `./client` entry ships as source, so an import reaching outside it passes every step
+      # above and fails for the first time in a consumer's install.
+      - run: pnpm check:pack

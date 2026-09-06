@@ -19,6 +19,9 @@ jobs:
         with: { node-version: 24 }
       - run: if [ -f pnpm-lock.yaml ]; then pnpm install --frozen-lockfile; else pnpm install; fi
       - run: pnpm build
+      # Again here, and not only in ci.yml: a red CI run does not stop this workflow, so the one
+      # path that actually reaches the registry needs the gate on it.
+      - run: pnpm check:pack
 
       - name: Write a changeset when the commit did not
         env:
