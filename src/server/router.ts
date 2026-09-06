@@ -54,13 +54,28 @@ export function trackerRouter(kernel: Kernel) {
   return os.router({
     // ---------------------------------------------------------------- projects
     projects: {
-      list: scoped.projects.list
-        .use(requires('tracker.project.view'))
-        .handler(({ input, context }) =>
-          run(context, input.workspaceId, (tx) =>
-            svc.projects.list(tx, context.principal, input.workspaceId, input.includeArchived),
-          ),
+      /**
+       * No `requires()`, deliberately.
+       *
+       * `requires()` asks at **workspace** scope, and `tracker.project.view` is a project-scoped
+       * permission — core's `guestFloor` denies every project-scoped key to a guest at workspace
+       * level precisely so that a project binding can grant it back one project at a time. So the
+       * guard refused a scoped guest the list of the one project they had been given, which is the
+       * limit `core/src/modules/core/services/roles.ts` records as "a scoped guest still cannot
+       * list" and names a module listing at workspace scope as the fix.
+       *
+       * Nothing is exposed by its absence: `ProjectService.list` returns only
+       * `AccessService.visibleProjectIds`, which keeps a project only when
+       * `authz.can(principal, 'tracker.project.view', { kind: 'project', … })` passes for that
+       * project *and* private projects have the caller as a member — so a caller who may see
+       * nothing gets `[]` rather than a 403. Membership in the workspace is still enforced, one
+       * layer up, by `workspaceScoped`.
+       */
+      list: scoped.projects.list.handler(({ input, context }) =>
+        run(context, input.workspaceId, (tx) =>
+          svc.projects.list(tx, context.principal, input.workspaceId, input.includeArchived),
         ),
+      ),
       get: scoped.projects.get
         .use(requires('tracker.project.view'))
         .handler(({ input, context }) =>

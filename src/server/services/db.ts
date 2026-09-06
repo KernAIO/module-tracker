@@ -653,7 +653,19 @@ export const machineKey = (name: string, fallback = 'field'): string =>
     .replace(/^(\d)/, 'f$1')
     .slice(0, 48) || fallback
 
-export const issueUrl = (key: string): string => `/tracker/issues/${key}`
+/**
+ * Where a notification or a search hit sends somebody, workspace-relative — the shell prefixes
+ * `/<workspace slug>` before navigating (`CommandPalette.go`, `NotificationBell.openNotification`).
+ *
+ * **An issue is a parameter on the list, not a path of its own.** `/tracker/issues/<key>` had no
+ * declaration in the client module: `resolveModuleRoute` matches a declaration shorter than the URL
+ * as a prefix, so the address resolved to `/tracker` and quietly rendered the issue list — every
+ * tracker notification and every tracker search hit opened the list instead of the issue it named.
+ * `IssuesPage` reads `?issue=<key>` and hands it to `issues.getByKey`, which is what this emits.
+ *
+ * `projectUrl` is a real declaration (`/tracker/projects/:key`) and stays a path.
+ */
+export const issueUrl = (key: string): string => `/tracker?issue=${encodeURIComponent(key)}`
 export const projectUrl = (key: string): string => `/tracker/projects/${key}`
 
 export const uniq = <T>(values: Iterable<T>): T[] => [...new Set(values)]

@@ -34,7 +34,14 @@ export class ViewService {
     const filters = [eq(views.workspaceId, workspaceId)]
     if (projectId === null) filters.push(isNull(views.projectId))
     else if (projectId) filters.push(eq(views.projectId, projectId))
-    else filters.push(or(isNull(views.projectId), inArray(views.projectId, visible.length ? visible : ['']))!)
+    // `inArray(uuid column, [''])` is what an empty visible set used to compile to, and Postgres
+    // answers `invalid input syntax for type uuid: ""` (22P02) — so a caller who can see no project
+    // got a raw database error instead of their workspace-level views. `sql`false`` is the same
+    // shape `bindingsFor` uses in core for an empty group list.
+    else
+      filters.push(
+        or(isNull(views.projectId), visible.length ? inArray(views.projectId, visible) : sql`false`)!,
+      )
     const rows = await tx
       .select()
       .from(views)

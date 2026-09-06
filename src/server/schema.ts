@@ -34,6 +34,15 @@ const jsonArray = (name: string) => jsonb(name).notNull().default(sql`'[]'::json
 export const workspaces = schema.table('workspaces', {
   workspaceId: uuid('workspace_id').primaryKey(),
   createdAt: ts('created_at').notNull().defaultNow(),
+  /**
+   * When this workspace's issues were last re-indexed with a real search acl.
+   *
+   * Issues were indexed with `acl: null`, which core reads as "visible to everybody in the
+   * workspace", and those rows live in `core.search_documents` where no tracker migration can reach
+   * them. Null here means the workspace still has such rows; the `search-acl` job re-indexes it and
+   * stamps the column, so the repair happens once per workspace rather than on every boot.
+   */
+  searchAclBackfilledAt: ts('search_acl_backfilled_at'),
 })
 
 // =====================================================================================

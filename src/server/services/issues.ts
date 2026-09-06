@@ -72,6 +72,7 @@ import {
   uniq,
 } from './db.js'
 import type { NotifyService } from './notify.js'
+import { issueSearchAclFor, issueSearchDocument, searchableKeys } from './search.js'
 import { normaliseCustom } from './values.js'
 
 type UpsertIssueTemplate = z.infer<typeof UpsertIssueTemplateSchema>
@@ -345,7 +346,7 @@ export class IssueService {
     }
 
     const issue = (await this.hydrate(tx, [row!]))[0]!
-    await this.afterCreate(issue, principal, { mentions: extractMentions(description) })
+    await this.afterCreate(tx, issue, principal, { mentions: extractMentions(description) })
     if (settings.autoCreateIssueChannel) void this.ensureChatChannel(workspaceId, issue, watchers)
     return issue
   }
@@ -602,6 +603,7 @@ export class IssueService {
   }
 
   private async afterCreate(
+    tx: Tx,
     issue: Issue,
     principal: Principal,
     extra: { mentions: string[] },
@@ -650,7 +652,7 @@ export class IssueService {
       actorId: principal.userId,
       exclude: [principal.userId],
     })
-    await this.reindex(issue)
+    await this.reindex(tx, issue)
   }
 
   private async ensureChatChannel(workspaceId: string, issue: Issue, memberIds: string[]): Promise<void> {
@@ -670,26 +672,19 @@ export class IssueService {
     }
   }
 
-  /** Push one issue into the workspace search index. */
-  async reindex(issue: Issue): Promise<void> {
+  /**
+   * Push one issue into the workspace search index.
+   *
+   * The acl is read here rather than passed in because every caller is a mutation that has just
+   * finished: an issue moved to another project, or a project turned private, has to be re-indexed
+   * with the *new* set of readers. `?? []` is the fail-closed default — core reads a null acl as
+   * "everybody in the workspace".
+   */
+  async reindex(tx: Tx, issue: Issue): Promise<void> {
+    const acl = await issueSearchAclFor(tx, issue.workspaceId, issue.projectId)
+    const keys = await searchableKeys(tx, issue.workspaceId)
     await this.notify.index([
-      {
-        workspaceId: issue.workspaceId,
-        object: objectRef(issue.id),
-        title: `${issue.key} ${issue.title}`,
-        body: issue.descriptionText || null,
-        url: issueUrl(issue.key),
-        icon: 'square-check-big',
-        acl: null,
-        updatedAt: issue.updatedAt,
-        attributes: {
-          projectId: issue.projectId,
-          statusId: issue.statusId,
-          statusCategory: issue.statusCategory,
-          priority: issue.priority,
-          assigneeIds: issue.assigneeIds,
-        },
-      },
+      issueSearchDocument(issue.workspaceId, issue, { acl: acl ?? [], searchableKeys: keys }),
     ])
   }
 
@@ -924,7 +919,7 @@ export class IssueService {
     await this.notify.change(workspaceId, 'issue', issue.id, 'updated', {
       scope: { projectId: issue.projectId },
     })
-    await this.reindex(issue)
+    await this.reindex(tx, issue)
     return issue
   }
 
@@ -1001,7 +996,7 @@ export class IssueService {
       scope: { projectId: issue.projectId },
     })
     if (archived) await this.notify.unindex(workspaceId, 'issue', [issueId])
-    else await this.reindex(issue)
+    else await this.reindex(tx, issue)
     return issue
   }
 
@@ -1105,7 +1100,7 @@ export class IssueService {
     await this.notify.change(workspaceId, 'issue', issueId, 'updated', {
       scope: { projectId: target.id },
     })
-    await this.reindex(issue)
+    await this.reindex(tx, issue)
     return issue
   }
 

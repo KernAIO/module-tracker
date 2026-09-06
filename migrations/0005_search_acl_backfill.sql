@@ -1,0 +1,12 @@
+-- Issues were indexed into core's search with `acl: null`, and core reads a null acl as "visible to
+-- everybody in the workspace" — so every member, guests included, was served the key, title and
+-- indexed description of every issue in every project.
+--
+-- The documents themselves live in `core.search_documents`, which no tracker migration may touch, so
+-- the repair is a re-index rather than an UPDATE: the `search-acl` job walks the workspaces where
+-- this column is null, re-indexes their issues with a real acl (core upserts on
+-- (workspace, module, type, object) so each stale row is overwritten in place) and stamps the column.
+--
+-- Nullable and with no backfill of its own: an existing row means "not yet re-indexed", which is the
+-- honest starting state, and the image before this one ignores a column it does not know about.
+ALTER TABLE "mod_tracker"."workspaces" ADD COLUMN IF NOT EXISTS "search_acl_backfilled_at" timestamptz;

@@ -20,6 +20,7 @@ const WORKSPACE = randomUUID()
 const OTHER_WORKSPACE = randomUUID()
 const MEMBER = randomUUID()
 const OUTSIDER = randomUUID()
+const GUEST = randomUUID()
 
 let kernel: Kernel
 let app: FastifyInstance
@@ -38,6 +39,18 @@ const principalFor = (header: string | undefined): Principal => {
       instanceAdmin: false,
       service: null,
       memberships: [{ workspaceId: WORKSPACE, role: 'admin', roleIds: [], groupIds: [], status: 'active' }],
+      permissionVersion: 0,
+    } as Principal
+  if (header === 'guest')
+    return {
+      kind: 'user',
+      userId: GUEST,
+      email: 'guest@example.test',
+      name: 'Guest',
+      locale: 'en',
+      instanceAdmin: false,
+      service: null,
+      memberships: [{ workspaceId: WORKSPACE, role: 'guest', roleIds: [], groupIds: [], status: 'active' }],
       permissionVersion: 0,
     } as Principal
   if (header === 'outsider')
@@ -60,7 +73,7 @@ const principalFor = (header: string | undefined): Principal => {
 type Json = Record<string, unknown>
 const call = async (
   path: string,
-  opts: { method?: string; body?: unknown; as?: 'member' | 'outsider' } = {},
+  opts: { method?: string; body?: unknown; as?: 'member' | 'outsider' | 'guest' } = {},
 ): Promise<{ status: number; body: Json }> => {
   const response = await fetch(`${origin}${path}`, {
     method: opts.method ?? 'GET',
@@ -100,7 +113,33 @@ beforeAll(async () => {
     'search.remove': { handler: async () => ({ ok: true }) },
     'modules.isEnabled': { handler: async () => moduleEnabled },
     'authz.customRolePermissions': { handler: async () => [] },
-    'authz.bindings': { handler: async () => [] },
+    /**
+     * The guest deny-floor core's `bindingsFor` really returns, rather than an empty list.
+     *
+     * Every project-scoped key is denied to a guest at workspace scope, which is what makes a
+     * project binding able to grant one project at a time — and it is the reason
+     * `requires('tracker.project.view')` on `projects.list` refused a guest outright, since
+     * `requires()` asks at workspace scope. Stubbing `[]` here hid the whole class: the middleware
+     * passed because a guest still carried the key it was about to be denied in production.
+     */
+    'authz.bindings': {
+      handler: async (input: { workspaceId: string; role: string }) => {
+        if (input.role !== 'guest') return []
+        return [
+          {
+            subjectType: 'builtin_role',
+            subjectId: 'guest',
+            permissions: kernel.authz
+              .allPermissions()
+              .filter((p) => p.scope !== 'workspace' && p.scope !== 'instance')
+              .map((p) => p.key),
+            scopeKind: 'workspace',
+            scopeId: input.workspaceId,
+            deny: true,
+          },
+        ]
+      },
+    },
   })
   await kernel.start()
 
@@ -150,6 +189,21 @@ describe('authentication and workspace scoping', () => {
   it('rejects a member of a different workspace', async () => {
     const response = await call(`/api/tracker/projects?workspaceId=${WORKSPACE}`, { as: 'outsider' })
     expect(response.status).toBe(403)
+  })
+
+  /**
+   * `requires()` asks at **workspace** scope, and `tracker.project.view` is project-scoped — core's
+   * guest floor denies it to a guest at workspace level so that a project binding can grant it back
+   * one project at a time. The guard on `projects.list` therefore refused a guest the list of the
+   * one project they had been given, before the service beneath it could filter anything.
+   *
+   * The answer has to be an empty list rather than a 403: the service returns only
+   * `visibleProjectIds`, so a caller who may see nothing already gets nothing.
+   */
+  it('answers a guest with a project list rather than refusing it', async () => {
+    const response = await call(`/api/tracker/projects?workspaceId=${WORKSPACE}`, { as: 'guest' })
+    expect(response.status, 'a guest was refused the list before it could be filtered').toBe(200)
+    expect(response.body).toEqual([])
   })
 
   it('reports the module as disabled when the workspace turned it off', async () => {

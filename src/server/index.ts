@@ -16,7 +16,6 @@ import {
   KernError,
   type Kernel,
   packageVersion,
-  type Tx,
 } from '@kernhq/kernel'
 import { and, eq, inArray, isNull, lte, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -34,9 +33,15 @@ import {
 } from '../contract/index.js'
 import { seedTrackerDemo } from './demo.js'
 import { trackerRouter } from './router.js'
-import { cycles, fieldDefs, issues, projectMembers, projects, schema, workspaces } from './schema.js'
+import { cycles, issues, projectMembers, projects, schema, workspaces } from './schema.js'
 import { issueUrl, projectUrl } from './services/db.js'
 import { trackerServices } from './services/index.js'
+import {
+  issueSearchAclFor,
+  issueSearchDocument,
+  scanIssueDocuments,
+  searchableKeys,
+} from './services/search.js'
 
 export * from './rank.js'
 export * from './rich.js'
@@ -258,7 +263,63 @@ const jobs: JobDef<Record<string, unknown>>[] = [
       await trackerServices(kernel).imports.run(input.workspaceId as string, input.importJobId as string)
     },
   },
+  {
+    /**
+     * Re-index the workspaces whose issues are still in core's search index with `acl: null`.
+     *
+     * A null acl means "everybody in the workspace" to core, so those rows disclose every issue's
+     * key, title and indexed description to every member until they are overwritten. They live in
+     * `core.search_documents`, which a tracker migration must not touch, so the repair is an
+     * ordinary re-index: `core.search.index` upserts on (workspace, module, type, object), and
+     * `workspaces.search_acl_backfilled_at` records that a workspace is done so this costs one
+     * cheap query a run once it is.
+     *
+     * A workspace with the module switched off is left unstamped rather than indexed: core drops a
+     * disabled module's documents, so there is nothing stale there, and re-enabling brings it back
+     * into this job's reach on the next run.
+     */
+    name: 'search-acl',
+    cron: '25 * * * *',
+    handler: async (_input, { kernel }) => {
+      await backfillSearchAcls(kernel)
+    },
+  },
 ] as JobDef<Record<string, unknown>>[]
+
+/** Exported for the test that proves a stale null-acl document is actually overwritten. */
+export async function backfillSearchAcls(kernel: Kernel, limit = 25): Promise<number> {
+  const pending = await kernel.database.db
+    .select({ id: workspaces.workspaceId })
+    .from(workspaces)
+    .where(isNull(workspaces.searchAclBackfilledAt))
+    .limit(limit)
+  let done = 0
+  for (const { id: workspaceId } of pending) {
+    if (!(await kernel.isModuleEnabled(workspaceId, MODULE_ID).catch(() => true))) continue
+    try {
+      const batch: core.SearchDocument[] = []
+      const flush = async () => {
+        if (!batch.length) return
+        await kernel.call('core.search.index', { documents: batch.splice(0) })
+      }
+      for await (const document of scanIssueDocuments(kernel, workspaceId)) {
+        batch.push(document)
+        if (batch.length >= 200) await flush()
+      }
+      await flush()
+      await kernel.database.db
+        .update(workspaces)
+        .set({ searchAclBackfilledAt: new Date() })
+        .where(eq(workspaces.workspaceId, workspaceId))
+      done++
+    } catch (err) {
+      // Left unstamped on purpose: an unreachable core must mean "try again next hour", never
+      // "this workspace is repaired".
+      kernel.log.warn({ err: String(err), workspaceId, job: 'search-acl' }, 'tracker: acl backfill failed')
+    }
+  }
+  return done
+}
 
 /**
  * The tracker module: projects, work items, workflows, KQL, planning, time tracking and reports.
@@ -491,34 +552,14 @@ export const trackerModule = defineServerModule({
             .where(and(eq(issues.workspaceId, workspaceId), eq(issues.id, id)))
             .limit(1)
           if (!row || row.archivedAt) return null
-          return searchDocument(workspaceId, row, await searchableKeys(tx, workspaceId))
+          return issueSearchDocument(workspaceId, row, {
+            // `?? []` rather than `?? null`: null means "everybody in the workspace" to core, so an
+            // acl that could not be resolved has to be the empty one.
+            acl: (await issueSearchAclFor(tx, workspaceId, row.projectId)) ?? [],
+            searchableKeys: await searchableKeys(tx, workspaceId),
+          })
         }),
-      scan: async function* (workspaceId, kernel) {
-        // read once for the whole scan rather than per row
-        const keys = await kernel.database.withWorkspace(workspaceId, (tx) => searchableKeys(tx, workspaceId))
-        let cursor: string | null = null
-        for (;;) {
-          const rows: Array<typeof issues.$inferSelect> = await kernel.database.withWorkspace(
-            workspaceId,
-            (tx) =>
-              tx
-                .select()
-                .from(issues)
-                .where(
-                  and(
-                    eq(issues.workspaceId, workspaceId),
-                    isNull(issues.archivedAt),
-                    cursor ? sql`${issues.id} > ${cursor}` : sql`true`,
-                  ),
-                )
-                .orderBy(issues.id)
-                .limit(500),
-          )
-          if (!rows.length) return
-          for (const row of rows) yield searchDocument(workspaceId, row, keys)
-          cursor = rows.at(-1)?.id ?? null
-        }
-      },
+      scan: (workspaceId, kernel) => scanIssueDocuments(kernel, workspaceId),
     },
   ],
 
@@ -743,65 +784,6 @@ export const trackerModule = defineServerModule({
       .onConflictDoNothing({ target: workspaces.workspaceId })
   },
 })
-
-/**
- * Text from the custom fields marked `searchable`, appended to the indexed body.
- *
- * `searchable` has been settable since the field editor existed and reached nothing, so a workspace
- * that marked "Customer" searchable could not find an issue by customer name.
- */
-function searchableText(row: typeof issues.$inferSelect, searchableKeys: ReadonlySet<string>): string {
-  if (!searchableKeys.size) return ''
-  const custom = (row.custom as Record<string, unknown>) ?? {}
-  const parts: string[] = []
-  for (const key of searchableKeys) {
-    const value = custom[key]
-    if (value === null || value === undefined) continue
-    if (Array.isArray(value)) parts.push(value.filter((v) => typeof v === 'string').join(' '))
-    else if (typeof value === 'string' || typeof value === 'number') parts.push(String(value))
-  }
-  return parts.filter(Boolean).join(' ')
-}
-
-function searchDocument(
-  workspaceId: string,
-  row: typeof issues.$inferSelect,
-  searchableKeys: ReadonlySet<string> = new Set(),
-): core.SearchDocument {
-  const extra = searchableText(row, searchableKeys)
-  return {
-    workspaceId: workspaceId as core.SearchDocument['workspaceId'],
-    object: objectRef('issue', row.id),
-    title: `${row.key} ${row.title}`,
-    body: [row.descriptionText || '', extra].filter(Boolean).join('\n') || null,
-    url: issueUrl(row.key),
-    icon: 'square-check-big',
-    acl: null,
-    updatedAt: row.updatedAt.toISOString(),
-    attributes: {
-      projectId: row.projectId,
-      statusId: row.statusId,
-      statusCategory: row.statusCategory,
-      priority: row.priority,
-      assigneeIds: row.assigneeIds ?? [],
-    },
-  }
-}
-
-/** Keys of the workspace's custom fields marked `searchable`. */
-async function searchableKeys(tx: Tx, workspaceId: string): Promise<ReadonlySet<string>> {
-  const rows = await tx
-    .select({ key: fieldDefs.key })
-    .from(fieldDefs)
-    .where(
-      and(
-        eq(fieldDefs.workspaceId, workspaceId),
-        eq(fieldDefs.searchable, true),
-        isNull(fieldDefs.archivedAt),
-      ),
-    )
-  return new Set(rows.map((r) => r.key))
-}
 
 export default trackerModule
 export type TrackerModule = typeof trackerModule

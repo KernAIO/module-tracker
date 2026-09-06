@@ -506,7 +506,7 @@ export class TransitionService {
     await this.notify.change(workspaceId, 'issue', issue.id, 'updated', {
       scope: { projectId: issue.projectId },
     })
-    await this.issuesService.reindex(issue)
+    await this.issuesService.reindex(tx, issue)
     for (const hook of webhooks) void this.callWebhook(hook, issue)
     return issue
   }
