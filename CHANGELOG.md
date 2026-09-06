@@ -1,5 +1,11 @@
 # @kernhq/module-tracker
 
+## 0.12.4
+
+### Patch Changes
+
+- build: force one @kernhq/kernel copy with pnpm.overrides
+
 ## 0.12.3
 
 ### Patch Changes
